@@ -4,6 +4,7 @@ using OWML.ModHelper;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.EnterpriseServices.CompensatingResourceManager;
 using System.Linq;
 using System.Reflection;
 using Unity.Collections;
@@ -17,16 +18,17 @@ public class ShipLogAnywhere : ModBehaviour
 {
     public static ShipLogAnywhere Instance;
     public static ShipLogController shipLogController;
-    private ScreenPrompt _OpenPrompt;
     private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
     GameObject mirrorCamObj;
-    Camera mirrorCam;
-    Material displayMaterial;
     GameObject baseCube;
     GameObject screenQuad;
+    Camera mirrorCam;
+    Material displayMaterial;
+
     float offsetDistance = 0.5f;
     float orthographicSize = 0.33f;
     float gobjectDistanceToCamera = 1.2f;
+
     Dictionary<float, List<Callback>> slowUpdates = new Dictionary<float, List<Callback>>();
     private Dictionary<float, float> _elapsedTimeByInterval = new Dictionary<float, float>();
 
@@ -77,39 +79,26 @@ public class ShipLogAnywhere : ModBehaviour
         }
 
     }
-    public void OnStartSceneLoad(OWScene previousScene, OWScene newScene)
-    {
-        if (previousScene == OWScene.SolarSystem || previousScene == OWScene.EyeOfTheUniverse)
-        {
-            Locator.GetPromptManager().RemoveScreenPrompt(_OpenPrompt);
-        }
-    }
     private void SlowUpdate30fps()
     {
-        if (shipLogController)
+        if (mirrorCam)
         {
             mirrorCam.Render();
             //mirrorCam.orthographicSize = orthographicSize;
-        }
-        if (_OpenPrompt != null)
-        {
-            _OpenPrompt.SetVisibility(true);
         }
     }
 
     public void Start()
     {
         new Harmony("SlideDrum.ShipLogAnywhere").PatchAll(Assembly.GetExecutingAssembly());
-        OnCompleteSceneLoad(OWScene.TitleScreen, OWScene.TitleScreen); // We start on title screen
+        OnCompleteSceneLoad(OWScene.TitleScreen, OWScene.TitleScreen);
         LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
-        addSlowUpdate(0.016f,SlowUpdate30fps);
+        addSlowUpdate(0.033f, SlowUpdate30fps);
     }
     public void ShowShipComputer()
     {
         Camera cam = Camera.main;
         Transform camTransform = cam.transform;
-
-        // Final position for the object
 
         Vector3 offsetPos= camTransform.position + -camTransform.up * gobjectDistanceToCamera;
         Quaternion lookRot = Quaternion.LookRotation(camTransform.position - offsetPos, camTransform.forward);
@@ -122,7 +111,6 @@ public class ShipLogAnywhere : ModBehaviour
 
 
         shipLogController.enabled = true;
-        base.enabled = true;
         shipLogController._usingShipLog = true;
         shipLogController._exiting = false;
         shipLogController._shipLogCanvas.gameObject.SetActive(true);
@@ -142,7 +130,6 @@ public class ShipLogAnywhere : ModBehaviour
         }
         shipLogController._oneShotSource.PlayOneShot(global::AudioType.ShipLogBootUp, 1f);
         shipLogController._ambienceSource.FadeIn(Locator.GetAudioManager().GetSingleAudioClip(global::AudioType.ShipLogBootUp, true).length, true, false, 1f);
-
 
         //GlobalMessenger.FireEvent("EnterShipComputer");
         //Call firevent manually to exclude player camera
@@ -184,15 +171,10 @@ public class ShipLogAnywhere : ModBehaviour
     }
     public void setupShipLogObject()
     {
-        // Create the render texture
+        ModHelper.Console.WriteLine("Setting up ship log object", MessageType.Info);
         RenderTexture mirrorTexture = new RenderTexture((int)(Screen.width * 0.5f), (int)(Screen.height * 0.5f), 0);
         mirrorTexture.Create();
-
-
-        // Get the ShipLog canvas transform
         Transform canvasTransform = shipLogController._shipLogCanvas.transform;
-
-        // Set up the mirror camera
         mirrorCamObj = new GameObject("MirrorCamera");
         mirrorCam = mirrorCamObj.AddComponent<Camera>();
 
@@ -203,25 +185,20 @@ public class ShipLogAnywhere : ModBehaviour
         mirrorCam.orthographicSize = orthographicSize;
         mirrorCam.farClipPlane = offsetDistance * 2;
         
-
-       // Position the mirror camera behind the canvas
-       Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * offsetDistance;
+        Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * offsetDistance;
         mirrorCamObj.transform.position = mirrorCamPosition;
         mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
         mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
         mirrorCam.enabled = false;
 
-
-        // Create a cube as a dummy prefab base
         baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         baseCube.name = "ShipLogMirrorBase";
-        baseCube.transform.SetParent(Locator._timberHearth.transform);
+        baseCube.transform.SetParent(GameObject.Find("MainToolRoot").transform);
         baseCube.transform.localPosition = new Vector3(0, 1.5f, 2);
         baseCube.transform.localRotation = Quaternion.identity;
         baseCube.transform.localScale = Vector3.one;
         baseCube.GetComponent<Collider>().enabled = false;
 
-        // Create a quad and attach it to the cube as the "screen"
         screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         screenQuad.name = "ShipLogScreenFace";
         screenQuad.transform.SetParent(baseCube.transform);
@@ -237,6 +214,7 @@ public class ShipLogAnywhere : ModBehaviour
         displayMaterial.mainTexture = mirrorTexture;
         screenQuad.GetComponent<Renderer>().material = displayMaterial;
         screenQuad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
     }
     public void OnCompleteSceneLoad(OWScene previousScene, OWScene newScene)
     {
@@ -260,15 +238,12 @@ public class ShipLogAnywhere : ModBehaviour
             else
             {
                 ModHelper.Console.WriteLine("Found ship log!", MessageType.Success);
+                GameObject toolRoot = GameObject.Find("MainToolRoot");
+                ModHelper.Events.Unity.RunWhen(() => GameObject.Find("MainToolRoot") != null, () => {
+                    setupShipLogObject();
+                });
             }
         }
-        setupShipLogObject();
-        _OpenPrompt = new ScreenPrompt(InputLibrary.autopilot, "View ship log", 0, ScreenPrompt.DisplayState.Normal);
-        ModHelper.Events.Unity.RunWhen(() => Locator._promptManager != null, () =>
-        {
-            Locator.GetPromptManager().AddScreenPrompt(_OpenPrompt, PromptPosition.UpperRight, true);
-            ModHelper.Console.WriteLine("Sent screen prompt", MessageType.Info);
-        });
         GlobalMessenger.AddListener("ExitShipComputer", OnExitShipComputer);
     }
     public void OnExitShipComputer()
