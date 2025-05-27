@@ -23,8 +23,9 @@ public class ShipLogAnywhere : ModBehaviour
     Canvas canvas;
     GameObject rawImageObj;
     RawImage rawImage;
-    float offsetDistance = 1f;
+    float offsetDistance = 0.5f;
     float orthographicSize = 0.51f;
+    float timeSinceSlowUpdate = 0f;
 
     public void Awake()
     {
@@ -32,31 +33,35 @@ public class ShipLogAnywhere : ModBehaviour
     }
     private void Update()
     {
+        timeSinceSlowUpdate += Time.deltaTime;
+        if (timeSinceSlowUpdate > 0.05)
+        {
+            SlowUpdate();
+            timeSinceSlowUpdate = 0;
+        }
         if (shipLogController)
         {
             if (OWInput.IsNewlyPressed(InputLibrary.autopilot, InputMode.Character) && !shipLogController._usingShipLog)
             {
                 ShowShipComputer();
             }
-            if (shipLogController._usingShipLog)
-            {
-                Transform canvasTransform = shipLogController._shipLogCanvas.transform;
-                // Compute a position *behind* the canvas in its forward direction
-                Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * offsetDistance;
-                // Place the camera
-                mirrorCamObj.transform.position = mirrorCamPosition;
-                // Make the camera look at the canvas, using the canvas's own up vector
-                mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
-                mirrorCam.orthographicSize = orthographicSize;  // Adjust to fit the canvas size
-
-            }
-            else
-            {
-                mirrorCamObj.SetActive(false);
-                mirrorCanvasObj.SetActive(false);
-            }
         }
-        if (InGame && _OpenPrompt != null)
+
+    }
+    public void OnStartSceneLoad(OWScene previousScene, OWScene newScene)
+    {
+        if (previousScene == OWScene.SolarSystem || previousScene == OWScene.EyeOfTheUniverse)
+        {
+            Locator.GetPromptManager().RemoveScreenPrompt(_OpenPrompt);
+        }
+    }
+    private void SlowUpdate()
+    {
+        if (shipLogController)
+        {
+            mirrorCam.Render();
+        }
+        if (_OpenPrompt != null)
         {
             _OpenPrompt.SetVisibility(true);
         }
@@ -79,19 +84,6 @@ public class ShipLogAnywhere : ModBehaviour
         shipLogController._canvasAnimator.AnimateTo(1f, Vector3.one * 0.001f, 0.5f, null, false);
         Locator.GetToolModeSwapper().UnequipTool();
         Locator.GetFlashlight().TurnOff(false);
-        //shipLogController._attachPoint.AttachPlayer();
-        //Locator.GetPlayerCamera().GetComponent<PlayerCameraController>().SnapToDegrees(0f, -16.9f, 100f, true);
-        //AspectRatio aspectRatio = PlayerData.GetGraphicSettings().aspectRatio;
-        //float num = 38.33f;
-        //if (aspectRatio == AspectRatio.FOUR_THREE || aspectRatio == AspectRatio.FIVE_FOUR)
-        //{
-        //    num = 44f;
-        //}
-        //Locator.GetPlayerCamera().GetComponent<PlayerCameraController>().SnapToFieldOfView(num, 0.7f, true);
-        //if (Locator.GetPlayerSuit().IsWearingSuit(true) && Locator.GetPlayerDetector().GetComponent<OxygenDetector>().GetDetectOxygen())
-        //{
-        //    Locator.GetPlayerSuit().RemoveHelmet();
-        //}
         Locator.GetPromptManager().AddScreenPrompt(shipLogController._exitPrompt, shipLogController._upperRightPromptListMap, TextAnchor.MiddleRight, -1, false, false);
         Locator.GetPromptManager().AddScreenPrompt(shipLogController._exitPrompt, shipLogController._upperRightPromptListDetective, TextAnchor.MiddleRight, -1, false, false);
         List<ShipLogFact> list = shipLogController.BuildRevealQueue();
@@ -146,15 +138,17 @@ public class ShipLogAnywhere : ModBehaviour
         }
         shipLogController._mapMode.OnEnterComputer();
         shipLogController._currentMode.EnterMode("", list);
+
         mirrorCamObj.SetActive(true);
         mirrorCanvasObj.SetActive(true);
+
 
     }
     public void setupRenderTexture()
     {
-        RenderTexture mirrorTexture = new RenderTexture((int)(Screen.width * 0.5), (int)(Screen.height * 0.5), 16);
+        RenderTexture mirrorTexture = new RenderTexture((int)(Screen.width * 0.5), (int)(Screen.height * 0.5), 0);
         mirrorTexture.Create();
-
+        Transform canvasTransform = shipLogController._shipLogCanvas.transform;
         mirrorCamObj = new GameObject("MirrorCamera");
         mirrorCam = mirrorCamObj.AddComponent<Camera>();
         mirrorCanvasObj = new GameObject("MirrorDisplayCanvas");
@@ -165,17 +159,16 @@ public class ShipLogAnywhere : ModBehaviour
         int canvasLayer = shipLogController._shipLogCanvas.gameObject.layer;
 
         mirrorCam.cullingMask = 1 << canvasLayer;
+        //mirrorCam.cullingMask = -1;
         mirrorCam.orthographic = true;
-        //mirrorCam.clearFlags = CameraClearFlags.SolidColor;
-        //mirrorCam.backgroundColor = Color.clear;
         mirrorCam.targetTexture = mirrorTexture;
-        mirrorCam.enabled = true;
         mirrorCam.targetTexture = mirrorTexture;
 
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         mirrorCanvasObj.AddComponent<CanvasScaler>();
         mirrorCanvasObj.AddComponent<GraphicRaycaster>();
-
+        mirrorCam.orthographicSize = orthographicSize;
+        mirrorCam.farClipPlane = offsetDistance*2;
         rawImageObj.transform.SetParent(mirrorCanvasObj.transform, false);
         rawImage.texture = mirrorTexture;
 
@@ -185,9 +178,15 @@ public class ShipLogAnywhere : ModBehaviour
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = Vector2.zero;
         RectTransform parentRt = rt.parent.GetComponent<RectTransform>();
-        float width = parentRt.rect.width * 0.75f;
-        float height = parentRt.rect.height * 0.75f;
+        float width = parentRt.rect.width * 0.5f;
+        float height = parentRt.rect.height * 0.5f;
         rt.sizeDelta = new Vector2(width, height);
+        Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * offsetDistance;
+        mirrorCamObj.transform.position = mirrorCamPosition;
+        mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
+        mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
+
+        mirrorCam.enabled = false;
     }
     public void OnCompleteSceneLoad(OWScene previousScene, OWScene newScene)
     {
@@ -218,8 +217,14 @@ public class ShipLogAnywhere : ModBehaviour
         ModHelper.Events.Unity.RunWhen(() => Locator._promptManager != null, () =>
         {
             Locator.GetPromptManager().AddScreenPrompt(_OpenPrompt, PromptPosition.UpperRight, true);
-            enabled = true;
+            ModHelper.Console.WriteLine("Sent screen prompt", MessageType.Info);
         });
+        GlobalMessenger.AddListener("ExitShipComputer", OnExitShipComputer);
+    }
+    public void OnExitShipComputer()
+    {
+        mirrorCamObj.SetActive(false);
+        mirrorCanvasObj.SetActive(false);
     }
 }
 
