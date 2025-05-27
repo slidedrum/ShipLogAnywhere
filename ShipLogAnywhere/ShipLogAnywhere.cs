@@ -2,12 +2,14 @@
 using OWML.Common;
 using OWML.ModHelper;
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.EnterpriseServices.CompensatingResourceManager;
 using System.Linq;
 using System.Reflection;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+
 
 namespace ShipLogAnywhere;
 
@@ -19,25 +21,50 @@ public class ShipLogAnywhere : ModBehaviour
     private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
     GameObject mirrorCamObj;
     Camera mirrorCam;
-    GameObject mirrorCanvasObj;
-    Canvas canvas;
-    GameObject rawImageObj;
-    RawImage rawImage;
+    Material displayMaterial;
+    GameObject baseCube;
+    GameObject screenQuad;
     float offsetDistance = 0.5f;
-    float orthographicSize = 0.51f;
-    float timeSinceSlowUpdate = 0f;
+    float orthographicSize = 0.33f;
+    Dictionary<float, List<Callback>> slowUpdates = new Dictionary<float, List<Callback>>();
+    private Dictionary<float, float> _elapsedTimeByInterval = new Dictionary<float, float>();
 
     public void Awake()
     {
         Instance = this;
     }
+    public void addSlowUpdate(float interval, Callback callback)
+    {
+        if (slowUpdates.TryGetValue(interval, out var callbackList))
+        {
+            if (callbackList.Contains(callback))
+                ModHelper.Console.WriteLine($"Duplicate callback {callback.Target}", MessageType.Warning);
+            else
+                callbackList.Add(callback);
+        }
+        else
+            slowUpdates[interval] = new List<Callback> { callback };
+    }
     private void Update()
     {
-        timeSinceSlowUpdate += Time.deltaTime;
-        if (timeSinceSlowUpdate > 0.05)
+        foreach (var kvp in slowUpdates)
         {
-            SlowUpdate();
-            timeSinceSlowUpdate = 0;
+            float interval = kvp.Key;
+            List<Callback> callbacks = kvp.Value;
+
+            if (!_elapsedTimeByInterval.ContainsKey(interval))
+                _elapsedTimeByInterval[interval] = 0f;
+
+            _elapsedTimeByInterval[interval] += Time.deltaTime;
+
+            if (_elapsedTimeByInterval[interval] >= interval)
+            {
+                foreach (Callback callback in callbacks)
+                {
+                    callback?.Invoke();
+                }
+                _elapsedTimeByInterval[interval] = 0f;
+            }
         }
         if (shipLogController)
         {
@@ -45,6 +72,7 @@ public class ShipLogAnywhere : ModBehaviour
             {
                 ShowShipComputer();
             }
+            
         }
 
     }
@@ -55,11 +83,12 @@ public class ShipLogAnywhere : ModBehaviour
             Locator.GetPromptManager().RemoveScreenPrompt(_OpenPrompt);
         }
     }
-    private void SlowUpdate()
+    private void SlowUpdate30fps()
     {
         if (shipLogController)
         {
             mirrorCam.Render();
+            mirrorCam.orthographicSize = orthographicSize;
         }
         if (_OpenPrompt != null)
         {
@@ -72,9 +101,24 @@ public class ShipLogAnywhere : ModBehaviour
         new Harmony("SlideDrum.ShipLogAnywhere").PatchAll(Assembly.GetExecutingAssembly());
         OnCompleteSceneLoad(OWScene.TitleScreen, OWScene.TitleScreen); // We start on title screen
         LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
+        addSlowUpdate(0.0333f,SlowUpdate30fps);
     }
     public void ShowShipComputer()
     {
+        Camera cam = Camera.main;
+        Transform camTransform = cam.transform;
+
+        // Final position for the object
+        Vector3 offsetPos = camTransform.position + camTransform.forward * 2f;
+
+        // Rotation should make the object face the camera from that final position
+        Quaternion lookRot = Quaternion.LookRotation(
+            camTransform.position - offsetPos, // direction to camera
+            camTransform.up                    // keep aligned with camera's "up"
+        );
+
+        MoveObjectSmoothly(baseCube.transform, offsetPos, lookRot, 1f);
+
 
         shipLogController.enabled = true;
         base.enabled = true;
@@ -140,53 +184,60 @@ public class ShipLogAnywhere : ModBehaviour
         shipLogController._currentMode.EnterMode("", list);
 
         mirrorCamObj.SetActive(true);
-        mirrorCanvasObj.SetActive(true);
-
-
     }
-    public void setupRenderTexture()
+    public void setupShipLogObject()
     {
-        RenderTexture mirrorTexture = new RenderTexture((int)(Screen.width * 0.5), (int)(Screen.height * 0.5), 0);
+        // Create the render texture
+        RenderTexture mirrorTexture = new RenderTexture((int)(Screen.width * 0.5f), (int)(Screen.height * 0.5f), 0);
         mirrorTexture.Create();
+
+        // Get the ShipLog canvas transform
         Transform canvasTransform = shipLogController._shipLogCanvas.transform;
+
+        // Set up the mirror camera
         mirrorCamObj = new GameObject("MirrorCamera");
         mirrorCam = mirrorCamObj.AddComponent<Camera>();
-        mirrorCanvasObj = new GameObject("MirrorDisplayCanvas");
-        canvas = mirrorCanvasObj.AddComponent<Canvas>();
-        rawImageObj = new GameObject("MirrorDisplay");
-        rawImage = rawImageObj.AddComponent<RawImage>();
 
         int canvasLayer = shipLogController._shipLogCanvas.gameObject.layer;
-
         mirrorCam.cullingMask = 1 << canvasLayer;
-        //mirrorCam.cullingMask = -1;
         mirrorCam.orthographic = true;
         mirrorCam.targetTexture = mirrorTexture;
-        mirrorCam.targetTexture = mirrorTexture;
-
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        mirrorCanvasObj.AddComponent<CanvasScaler>();
-        mirrorCanvasObj.AddComponent<GraphicRaycaster>();
         mirrorCam.orthographicSize = orthographicSize;
-        mirrorCam.farClipPlane = offsetDistance*2;
-        rawImageObj.transform.SetParent(mirrorCanvasObj.transform, false);
-        rawImage.texture = mirrorTexture;
+        mirrorCam.farClipPlane = offsetDistance * 2;
+        
 
-        RectTransform rt = rawImage.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f);
-        rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = Vector2.zero;
-        RectTransform parentRt = rt.parent.GetComponent<RectTransform>();
-        float width = parentRt.rect.width * 0.5f;
-        float height = parentRt.rect.height * 0.5f;
-        rt.sizeDelta = new Vector2(width, height);
-        Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * offsetDistance;
+       // Position the mirror camera behind the canvas
+       Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * offsetDistance;
         mirrorCamObj.transform.position = mirrorCamPosition;
         mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
         mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
-
         mirrorCam.enabled = false;
+
+        // Create a cube as a dummy prefab base
+        baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        baseCube.name = "ShipLogMirrorBase";
+        baseCube.transform.SetParent(Locator._timberHearth.transform);
+        baseCube.transform.localPosition = new Vector3(0, 1.5f, 2);
+        baseCube.transform.localRotation = Quaternion.identity;
+        baseCube.transform.localScale = Vector3.one;
+        baseCube.GetComponent<Collider>().enabled = false;
+
+        // Create a quad and attach it to the cube as the "screen"
+        screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        screenQuad.name = "ShipLogScreenFace";
+        screenQuad.transform.SetParent(baseCube.transform);
+        screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f); // slightly in front of cube face
+        screenQuad.transform.localRotation = Quaternion.Euler(0, 180f, 0);
+        float heightScale = 0.9f;
+        float widthScale = heightScale * (16f / 9f);
+        screenQuad.transform.localScale = new Vector3(widthScale, heightScale, 1f);
+        screenQuad.GetComponent<Collider>().enabled = false;
+
+        // Assign the render texture to the quad's material
+        displayMaterial = new Material(Shader.Find("Unlit/Texture"));
+        displayMaterial.mainTexture = mirrorTexture;
+        screenQuad.GetComponent<Renderer>().material = displayMaterial;
+        screenQuad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
     public void OnCompleteSceneLoad(OWScene previousScene, OWScene newScene)
     {
@@ -212,7 +263,7 @@ public class ShipLogAnywhere : ModBehaviour
                 ModHelper.Console.WriteLine("Found ship log!", MessageType.Success);
             }
         }
-        setupRenderTexture();
+        setupShipLogObject();
         _OpenPrompt = new ScreenPrompt(InputLibrary.autopilot, "View ship log", 0, ScreenPrompt.DisplayState.Normal);
         ModHelper.Events.Unity.RunWhen(() => Locator._promptManager != null, () =>
         {
@@ -224,7 +275,29 @@ public class ShipLogAnywhere : ModBehaviour
     public void OnExitShipComputer()
     {
         mirrorCamObj.SetActive(false);
-        mirrorCanvasObj.SetActive(false);
+    }
+    public void MoveObjectSmoothly(Transform targetTransform, Vector3 targetPosition, Quaternion targetRotation, float duration)
+    {
+        StartCoroutine(SmoothMoveAndRotate(targetTransform, targetPosition, targetRotation, duration));
+    }
+
+    private IEnumerator SmoothMoveAndRotate(Transform objTransform, Vector3 targetPos, Quaternion targetRot, float duration)
+    {
+        Vector3 startPos = objTransform.position;
+        Quaternion startRot = objTransform.rotation;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            float t = elapsed / duration;
+            objTransform.position = Vector3.Lerp(startPos, targetPos, t);
+            objTransform.rotation = Quaternion.Slerp(startRot, targetRot, t);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        objTransform.position = targetPos;
+        objTransform.rotation = targetRot;
     }
 }
 
