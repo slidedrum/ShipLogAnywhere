@@ -26,6 +26,7 @@ public class ShipLogAnywhere : ModBehaviour
     GameObject screenQuad;
     float offsetDistance = 0.5f;
     float orthographicSize = 0.33f;
+    float gobjectDistanceToCamera = 1.2f;
     Dictionary<float, List<Callback>> slowUpdates = new Dictionary<float, List<Callback>>();
     private Dictionary<float, float> _elapsedTimeByInterval = new Dictionary<float, float>();
 
@@ -66,7 +67,7 @@ public class ShipLogAnywhere : ModBehaviour
                 _elapsedTimeByInterval[interval] = 0f;
             }
         }
-        if (shipLogController)
+        if (shipLogController & InGame)
         {
             if (OWInput.IsNewlyPressed(InputLibrary.autopilot, InputMode.Character) && !shipLogController._usingShipLog)
             {
@@ -88,7 +89,7 @@ public class ShipLogAnywhere : ModBehaviour
         if (shipLogController)
         {
             mirrorCam.Render();
-            mirrorCam.orthographicSize = orthographicSize;
+            //mirrorCam.orthographicSize = orthographicSize;
         }
         if (_OpenPrompt != null)
         {
@@ -101,7 +102,7 @@ public class ShipLogAnywhere : ModBehaviour
         new Harmony("SlideDrum.ShipLogAnywhere").PatchAll(Assembly.GetExecutingAssembly());
         OnCompleteSceneLoad(OWScene.TitleScreen, OWScene.TitleScreen); // We start on title screen
         LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
-        addSlowUpdate(0.0333f,SlowUpdate30fps);
+        addSlowUpdate(0.016f,SlowUpdate30fps);
     }
     public void ShowShipComputer()
     {
@@ -109,13 +110,13 @@ public class ShipLogAnywhere : ModBehaviour
         Transform camTransform = cam.transform;
 
         // Final position for the object
-        Vector3 offsetPos = camTransform.position + camTransform.forward * 2f;
 
-        // Rotation should make the object face the camera from that final position
-        Quaternion lookRot = Quaternion.LookRotation(
-            camTransform.position - offsetPos, // direction to camera
-            camTransform.up                    // keep aligned with camera's "up"
-        );
+        Vector3 offsetPos= camTransform.position + -camTransform.up * gobjectDistanceToCamera;
+        Quaternion lookRot = Quaternion.LookRotation(camTransform.position - offsetPos, camTransform.forward);
+        baseCube.transform.rotation = lookRot;
+        baseCube.transform.position = offsetPos;
+        offsetPos = camTransform.position + camTransform.forward * gobjectDistanceToCamera;
+        lookRot = Quaternion.LookRotation(camTransform.position - offsetPos, camTransform.up);
 
         MoveObjectSmoothly(baseCube.transform, offsetPos, lookRot, 1f);
 
@@ -173,8 +174,6 @@ public class ShipLogAnywhere : ModBehaviour
                 eventData.isInvoking = false;
             }
         }
-
-
         shipLogController._splashScreen.OnEnterComputer();
         if (PlayerData.GetDetectiveModeEnabled())
         {
@@ -182,14 +181,13 @@ public class ShipLogAnywhere : ModBehaviour
         }
         shipLogController._mapMode.OnEnterComputer();
         shipLogController._currentMode.EnterMode("", list);
-
-        mirrorCamObj.SetActive(true);
     }
     public void setupShipLogObject()
     {
         // Create the render texture
         RenderTexture mirrorTexture = new RenderTexture((int)(Screen.width * 0.5f), (int)(Screen.height * 0.5f), 0);
         mirrorTexture.Create();
+
 
         // Get the ShipLog canvas transform
         Transform canvasTransform = shipLogController._shipLogCanvas.transform;
@@ -212,6 +210,7 @@ public class ShipLogAnywhere : ModBehaviour
         mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
         mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
         mirrorCam.enabled = false;
+
 
         // Create a cube as a dummy prefab base
         baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -274,7 +273,7 @@ public class ShipLogAnywhere : ModBehaviour
     }
     public void OnExitShipComputer()
     {
-        mirrorCamObj.SetActive(false);
+        
     }
     public void MoveObjectSmoothly(Transform targetTransform, Vector3 targetPosition, Quaternion targetRotation, float duration)
     {
@@ -301,3 +300,14 @@ public class ShipLogAnywhere : ModBehaviour
     }
 }
 
+[HarmonyPatch]
+public class PlayerCameraControllerPatch
+{
+    [HarmonyPrefix]
+    [HarmonyPatch(typeof(PlayerCameraController), nameof(PlayerCameraController.OnEnterShipComputer))]
+    public static bool PlayerCameraController_OnEnterShipComputer()
+    {
+        ShipLogAnywhere.Instance.ModHelper.Console.WriteLine("The used ship comooter!");
+        return false;
+    }
+}
