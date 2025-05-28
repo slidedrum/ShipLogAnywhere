@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShipLogAnywhere", "ShipLogAnywhere.csproj", "{9929D647-DE56-058B-1A1E-D6F2B7BADE68}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9929D647-DE56-058B-1A1E-D6F2B7BADE68}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9929D647-DE56-058B-1A1E-D6F2B7BADE68}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9929D647-DE56-058B-1A1E-D6F2B7BADE68}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9929D647-DE56-058B-1A1E-D6F2B7BADE68}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {BE69F896-5FF6-4821-9FA6-33DB70D39370}
+	EndGlobalSection
+EndGlobal

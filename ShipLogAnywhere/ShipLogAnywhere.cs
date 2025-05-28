@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using OWML.Common;
+using OWML.Logging;
 using OWML.ModHelper;
 using System;
 using System.Collections;
@@ -18,6 +19,7 @@ public class ShipLogAnywhere : ModBehaviour
 {
     public static ShipLogAnywhere Instance;
     public static ShipLogController shipLogController;
+    public static IModHelper modHelper;
     private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
     GameObject mirrorCamObj;
     GameObject baseCube;
@@ -31,25 +33,14 @@ public class ShipLogAnywhere : ModBehaviour
     float resScale = 0.60f;
     float offsetDistance = 0.5f;
     float orthographicSize = 0.33f;
-    float gobjectDistanceToCamera = 1.5f;
+    public static float gobjectDistanceToCamera = 1.5f;
 
     Dictionary<float, List<Callback>> slowUpdates = new Dictionary<float, List<Callback>>();
     private Dictionary<float, float> _elapsedTimeByInterval = new Dictionary<float, float>();
 
-    private bool _isPuttingAway;
-    private Transform _stowTransform;
-    private Transform _holdTransform;
-    DampedSpringQuat _moveSpring = new DampedSpringQuat(15f,0.8f);
-    private bool _isEquipped;
-    private bool _isCentered;
-    float _arrivalDegrees = 1f;
     private string _mode;
     private bool _requireSuit;
-
-    public void Awake()
-    {
-        Instance = this;
-    }
+    private PortableShipLogTool portableShipLogTool;
     public void addSlowUpdate(float interval, Callback callback)
     {
         if (slowUpdates.TryGetValue(interval, out var callbackList))
@@ -85,42 +76,12 @@ public class ShipLogAnywhere : ModBehaviour
         }
         if (shipLogController & InGame)
         {
-            if (OWInput.IsNewlyPressed(InputLibrary.autopilot, InputMode.Character) && !shipLogController._usingShipLog)
+            if (OWInput.IsNewlyPressed(InputLibrary.autopilot, InputMode.Character) && !shipLogController._usingShipLog && portableShipLogTool)
             {
-                ShowShipComputer();
+                portableShipLogTool.EquipTool();
             }
 
         }
-
-        if (HasEquipAnimation() && AllowEquipAnimation())
-        {
-            float num = (_isPuttingAway ? Time.unscaledDeltaTime : Time.deltaTime);
-            Quaternion quaternion = (_isPuttingAway ? _stowTransform.localRotation : _holdTransform.localRotation);
-            cubePivot.transform.localRotation = _moveSpring.Update(cubePivot.transform.localRotation, quaternion, num);
-            float num2 = Quaternion.Angle(cubePivot.transform.localRotation, quaternion);
-            if (_isEquipped && !_isCentered && num2 <= _arrivalDegrees)
-            {
-                _isCentered = true;
-            }
-            if (_isPuttingAway && num2 <= _arrivalDegrees)
-            {
-                _isEquipped = false;
-                _isPuttingAway = false;
-                cubePivot.SetActive(false);
-                _moveSpring.ResetVelocity();
-            }
-        }
-
-    }
-
-    private bool AllowEquipAnimation()
-    {
-        return true;
-    }
-
-    private bool HasEquipAnimation()
-    {
-        return this._stowTransform != null && this._holdTransform != null;
     }
 
     private void SlowUpdate60fps()
@@ -138,87 +99,19 @@ public class ShipLogAnywhere : ModBehaviour
         OnCompleteSceneLoad(OWScene.TitleScreen, OWScene.TitleScreen);
         LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
         addSlowUpdate(0.016f, SlowUpdate60fps);
+        ModHelper.Console.WriteLine("Ship log anywhere starting up!",MessageType.Success);
+        Instance = this;
+        modHelper = ModHelper;
     }
     public override void Configure(IModConfig config)
     {
         _mode = config.GetSettingsValue<string>("mode");
         _requireSuit = config.GetSettingsValue<bool>("requireSuit");
     }
-    public void ShowShipComputer()
-    {
-
-        if (_isEquipped)
-            return;
-        _isEquipped = true;
-        _isPuttingAway = false;
-        _isCentered = !HasEquipAnimation();
-        if (HasEquipAnimation())
-        {
-            cubePivot.transform.localRotation = _stowTransform.localRotation;
-        }
-        cubePivot.SetActive(true);
-
-        shipLogController.enabled = true;
-        shipLogController._usingShipLog = true;
-        shipLogController._exiting = false;
-        shipLogController._shipLogCanvas.gameObject.SetActive(true);
-        shipLogController._canvasAnimator.AnimateTo(1f, Vector3.one * 0.001f, 0.5f, null, false);
-        Locator.GetToolModeSwapper().UnequipTool();
-        Locator.GetFlashlight().TurnOff(false);
-        Locator.GetPromptManager().AddScreenPrompt(shipLogController._exitPrompt, shipLogController._upperRightPromptListMap, TextAnchor.MiddleRight, -1, false, false);
-        Locator.GetPromptManager().AddScreenPrompt(shipLogController._exitPrompt, shipLogController._upperRightPromptListDetective, TextAnchor.MiddleRight, -1, false, false);
-        List<ShipLogFact> list = shipLogController.BuildRevealQueue();
-        if (list.Count > 0)
-        {
-            shipLogController._currentMode = shipLogController._detectiveMode;
-        }
-        if (!PlayerData.GetDetectiveModeEnabled() || !PlayerData.GetPersistentCondition("HAS_USED_SHIPLOG"))
-        {
-            shipLogController._currentMode = shipLogController._mapMode;
-        }
-        shipLogController._oneShotSource.PlayOneShot(global::AudioType.ShipLogBootUp, 1f);
-        shipLogController._ambienceSource.FadeIn(Locator.GetAudioManager().GetSingleAudioClip(global::AudioType.ShipLogBootUp, true).length, true, false, 1f);
-
-        //GlobalMessenger.FireEvent("EnterShipComputer");
-        //Call firevent manually to exclude player camera
-        IDictionary<string, GlobalMessenger.EventData> dictionary = GlobalMessenger.eventTable;
-        lock (dictionary)
-        {
-            GlobalMessenger.EventData eventData;
-            if (GlobalMessenger.eventTable.TryGetValue("EnterShipComputer", out eventData))
-            {
-                if (eventData.isInvoking)
-                {
-                    throw new InvalidOperationException("GlobalMessenger does not support recursive FireEvent calls to the same eventType.");
-                }
-                eventData.isInvoking = true;
-                eventData.temp.AddRange(eventData.callbacks);
-                for (int i = 0; i < eventData.temp.Count; i++)
-                {
-                    try
-                    {
-                        if (!(eventData.temp[i].Target is PlayerCameraController)) //extra check to avoid notifying player camera
-                            eventData.temp[i]();
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogException(ex);
-                    }
-                }
-                eventData.temp.Clear();
-                eventData.isInvoking = false;
-            }
-        }
-        shipLogController._splashScreen.OnEnterComputer();
-        if (PlayerData.GetDetectiveModeEnabled())
-        {
-            shipLogController._detectiveMode.OnEnterComputer();
-        }
-        shipLogController._mapMode.OnEnterComputer();
-        shipLogController._currentMode.EnterMode("", list);
-    }
     public void setupShipLogObject()
     {
+        //This will be dramatically simplfied once I get a proper model for it and can set up a prefab.
+        //But for now this will all be done in code.
         ModHelper.Console.WriteLine("Setting up ship log object", MessageType.Info);
         
         float targetAspect = 58f / 37f;
@@ -255,7 +148,8 @@ public class ShipLogAnywhere : ModBehaviour
         cubePivot.transform.SetParent(GameObject.Find("MainToolRoot").transform);
         cubePivot.transform.localPosition = new Vector3(0, 0f,0);
         cubePivot.transform.localRotation = Quaternion.identity;
-        cubePivot.SetActive(false);
+        portableShipLogTool = cubePivot.AddComponent<PortableShipLogTool>();
+        //cubePivot.SetActive(false);
 
         baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         baseCube.name = "ShipLogMirrorBase";
@@ -308,77 +202,44 @@ public class ShipLogAnywhere : ModBehaviour
             else
             {
                 ModHelper.Console.WriteLine("Found ship log!", MessageType.Success);
-                GameObject toolRoot = GameObject.Find("MainToolRoot");
+
                 ModHelper.Events.Unity.RunWhen(() => GameObject.Find("MainToolRoot") != null, () =>
                 {
-                    Transform cameraRoot = GameObject.Find("MainToolRoot")?.transform;
-                    if (cameraRoot != null)
-                    {
-                        _stowTransform = new GameObject("StowTransform").transform;
-                        _stowTransform.SetParent(cameraRoot, false);
-
-                        _holdTransform = new GameObject("HoldTransform").transform;
-                        _holdTransform.SetParent(cameraRoot, false);
-
-                        Vector3 offsetPos = cameraRoot.position + -cameraRoot.up * gobjectDistanceToCamera;
-                        Quaternion lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.forward);
-                        _stowTransform.transform.rotation = lookRot;
-                        _stowTransform.transform.position = offsetPos;
-                        offsetPos = cameraRoot.position + cameraRoot.forward * gobjectDistanceToCamera;
-                        lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.up);
-                        _holdTransform.transform.rotation = lookRot;
-                        _holdTransform.transform.position = offsetPos;
-
-                    }
-                    else
-                    {
-                        ModHelper.Console.WriteLine("CameraRoot not found!", MessageType.Error);
-                    }
                     setupShipLogObject();
                 });
             }
         }
-        GlobalMessenger.AddListener("ExitShipComputer", OnExitShipComputer);
     }
-    public void OnExitShipComputer()
+    public void pickyFireEvent(string eventType, List<object> exclusions)
     {
-        if (_isEquipped)
+        ModHelper.Console.WriteLine("Using helper method", MessageType.Info);
+        IDictionary<string, GlobalMessenger.EventData> dictionary = GlobalMessenger.eventTable;
+        lock (dictionary)
         {
-            _isEquipped = false;
-            if (!HasEquipAnimation())
+            GlobalMessenger.EventData eventData;
+            if (GlobalMessenger.eventTable.TryGetValue("EnterShipComputer", out eventData))
             {
-                _isCentered = false;
-                cubePivot.SetActive(false);
-                return;
-            }
-            if (!_isPuttingAway)
-            {
-                _isPuttingAway = true;
-                _isCentered = false;
+                if (eventData.isInvoking)
+                {
+                    throw new InvalidOperationException("GlobalMessenger does not support recursive FireEvent calls to the same eventType.");
+                }
+                eventData.isInvoking = true;
+                eventData.temp.AddRange(eventData.callbacks);
+                for (int i = 0; i < eventData.temp.Count; i++)
+                {
+                    try
+                    {
+                        if (!exclusions.Contains(eventData.temp[i].Target)) //extra check to avoid notifying player camera
+                            eventData.temp[i]();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex);
+                    }
+                }
+                eventData.temp.Clear();
+                eventData.isInvoking = false;
             }
         }
-    }
-    public void MoveObjectSmoothly(Transform targetTransform, Vector3 targetPosition, Quaternion targetRotation, float duration)
-    {
-        StartCoroutine(SmoothMoveAndRotate(targetTransform, targetPosition, targetRotation, duration));
-    }
-
-    private IEnumerator SmoothMoveAndRotate(Transform objTransform, Vector3 targetPos, Quaternion targetRot, float duration)
-    {
-        Vector3 startPos = objTransform.position;
-        Quaternion startRot = objTransform.rotation;
-        float elapsed = 0f;
-
-        while (elapsed < duration)
-        {
-            float t = elapsed / duration;
-            objTransform.position = Vector3.Lerp(startPos, targetPos, t);
-            objTransform.rotation = Quaternion.Slerp(startRot, targetRot, t);
-            elapsed += Time.deltaTime;
-            yield return null;
-        }
-
-        objTransform.position = targetPos;
-        objTransform.rotation = targetRot;
     }
 }
