@@ -32,6 +32,14 @@ public class ShipLogAnywhere : ModBehaviour
     Dictionary<float, List<Callback>> slowUpdates = new Dictionary<float, List<Callback>>();
     private Dictionary<float, float> _elapsedTimeByInterval = new Dictionary<float, float>();
 
+    private bool _isPuttingAway;
+    private Transform _stowTransform;
+    private Transform _holdTransform;
+    DampedSpringQuat _moveSpring = new DampedSpringQuat();
+    private bool _isEquipped;
+    private bool _isCentered;
+    float _arrivalDegrees = 1f;
+
     public void Awake()
     {
         Instance = this;
@@ -75,10 +83,40 @@ public class ShipLogAnywhere : ModBehaviour
             {
                 ShowShipComputer();
             }
-            
+
+        }
+
+        if (HasEquipAnimation() && AllowEquipAnimation())
+        {
+            float num = (_isPuttingAway ? Time.unscaledDeltaTime : Time.deltaTime);
+            Quaternion quaternion = (_isPuttingAway ? _stowTransform.localRotation : _holdTransform.localRotation);
+            baseCube.transform.localRotation = _moveSpring.Update(baseCube.transform.localRotation, quaternion, num);
+            float num2 = Quaternion.Angle(baseCube.transform.localRotation, quaternion);
+            if (_isEquipped && !_isCentered && num2 <= _arrivalDegrees)
+            {
+                _isCentered = true;
+            }
+            if (_isPuttingAway && num2 <= _arrivalDegrees)
+            {
+                _isEquipped = false;
+                _isPuttingAway = false;
+                baseCube.SetActive(false);
+                _moveSpring.ResetVelocity();
+            }
         }
 
     }
+
+    private bool AllowEquipAnimation()
+    {
+        return true;
+    }
+
+    private bool HasEquipAnimation()
+    {
+        return this._stowTransform != null && this._holdTransform != null;
+    }
+
     private void SlowUpdate30fps()
     {
         if (mirrorCam)
@@ -97,17 +135,19 @@ public class ShipLogAnywhere : ModBehaviour
     }
     public void ShowShipComputer()
     {
-        Camera cam = Camera.main;
-        Transform camTransform = cam.transform;
 
-        Vector3 offsetPos= camTransform.position + -camTransform.up * gobjectDistanceToCamera;
-        Quaternion lookRot = Quaternion.LookRotation(camTransform.position - offsetPos, camTransform.forward);
-        baseCube.transform.rotation = lookRot;
-        baseCube.transform.position = offsetPos;
-        offsetPos = camTransform.position + camTransform.forward * gobjectDistanceToCamera;
-        lookRot = Quaternion.LookRotation(camTransform.position - offsetPos, camTransform.up);
+        if (_isEquipped)
+            return;
+        _isEquipped = true;
+        _isPuttingAway = false;
+        _isCentered = !HasEquipAnimation();
+        if (HasEquipAnimation())
+        {
+            baseCube.transform.localRotation = _stowTransform.localRotation;
+        }
+        baseCube.SetActive(true);
 
-        MoveObjectSmoothly(baseCube.transform, offsetPos, lookRot, 1f);
+        //MoveObjectSmoothly(baseCube.transform, offsetPos, lookRot, 1f);
 
 
         shipLogController.enabled = true;
@@ -184,7 +224,7 @@ public class ShipLogAnywhere : ModBehaviour
         mirrorCam.targetTexture = mirrorTexture;
         mirrorCam.orthographicSize = orthographicSize;
         mirrorCam.farClipPlane = offsetDistance * 2;
-        
+
         Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * offsetDistance;
         mirrorCamObj.transform.position = mirrorCamPosition;
         mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
@@ -239,7 +279,30 @@ public class ShipLogAnywhere : ModBehaviour
             {
                 ModHelper.Console.WriteLine("Found ship log!", MessageType.Success);
                 GameObject toolRoot = GameObject.Find("MainToolRoot");
-                ModHelper.Events.Unity.RunWhen(() => GameObject.Find("MainToolRoot") != null, () => {
+                ModHelper.Events.Unity.RunWhen(() => GameObject.Find("MainToolRoot") != null, () =>
+                {
+                    Transform cameraRoot = GameObject.Find("Player_Body/ShakeRoot/CameraRoot")?.transform;
+                    if (cameraRoot != null)
+                    {
+                        _stowTransform = new GameObject("StowTransform").transform;
+                        _stowTransform.SetParent(cameraRoot, false);
+
+                        _holdTransform = new GameObject("HoldTransform").transform;
+                        _holdTransform.SetParent(cameraRoot, false);
+
+                        Vector3 offsetPos = cameraRoot.position + -cameraRoot.up * gobjectDistanceToCamera;
+                        Quaternion lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.forward);
+                        _stowTransform.transform.rotation = lookRot;
+                        _stowTransform.transform.position = offsetPos;
+                        offsetPos = cameraRoot.position + cameraRoot.forward * gobjectDistanceToCamera;
+                        lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.up);
+                        _holdTransform.transform.rotation = lookRot;
+                        _holdTransform.transform.position = offsetPos;
+                    }
+                    else
+                    {
+                        ModHelper.Console.WriteLine("CameraRoot not found!", MessageType.Error);
+                    }
                     setupShipLogObject();
                 });
             }
@@ -248,7 +311,21 @@ public class ShipLogAnywhere : ModBehaviour
     }
     public void OnExitShipComputer()
     {
-        
+        if (_isEquipped)
+        {
+            _isEquipped = false;
+            if (!HasEquipAnimation())
+            {
+                _isCentered = false;
+                baseCube.SetActive(false);
+                return;
+            }
+            if (!_isPuttingAway)
+            {
+                _isPuttingAway = true;
+                _isCentered = false;
+            }
+        }
     }
     public void MoveObjectSmoothly(Transform targetTransform, Vector3 targetPosition, Quaternion targetRotation, float duration)
     {
@@ -272,17 +349,5 @@ public class ShipLogAnywhere : ModBehaviour
 
         objTransform.position = targetPos;
         objTransform.rotation = targetRot;
-    }
-}
-
-[HarmonyPatch]
-public class PlayerCameraControllerPatch
-{
-    [HarmonyPrefix]
-    [HarmonyPatch(typeof(PlayerCameraController), nameof(PlayerCameraController.OnEnterShipComputer))]
-    public static bool PlayerCameraController_OnEnterShipComputer()
-    {
-        ShipLogAnywhere.Instance.ModHelper.Console.WriteLine("The used ship comooter!");
-        return false;
     }
 }
