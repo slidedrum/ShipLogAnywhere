@@ -12,7 +12,6 @@ public class PortableShipLogTool : PlayerTool
 
     public PortableShipLogTool()
 	{
-        ShipLogAnywhere.modHelper.Console.WriteLine("Here", MessageType.Success);
         this._moveSpring = new DampedSpringQuat(15f, 0.8f);
         GameObject shipLogObject = GameObject.Find("ShipLog");
         if (shipLogObject == null)
@@ -63,6 +62,7 @@ public class PortableShipLogTool : PlayerTool
 
     public override void EquipTool()
     {
+        //this is mostly a re-implentation of the ShipLogController.EnterShipComputer() method.
         Locator.GetToolModeSwapper().UnequipTool();
         base.EquipTool();
         shipLogController.enabled = true;

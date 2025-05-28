@@ -164,7 +164,7 @@ public class ShipLogAnywhere : ModBehaviour
 
         screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         screenQuad.name = "ShipLogScreenFace";
-        screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f); // slightly in front of cube face
+        screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f);
         screenQuad.transform.localRotation = Quaternion.Euler(0, 180f, 0);
         float heightScale = 0.9f;
         float widthScale = heightScale * (16f / 9f);
@@ -173,7 +173,7 @@ public class ShipLogAnywhere : ModBehaviour
         screenQuad.GetComponent<Collider>().enabled = false;
         screenQuad.transform.SetParent(baseCube.transform,false);
 
-        // Assign the render texture to the quad's material        screenQuad.transform.SetParent(baseCube.transform);
+        // Assign the render texture to the quad's material
         displayMaterial = new Material(Shader.Find("Unlit/Texture"));
         displayMaterial.mainTexture = mirrorTexture;
         screenQuad.GetComponent<Renderer>().material = displayMaterial;
@@ -212,7 +212,6 @@ public class ShipLogAnywhere : ModBehaviour
     }
     public void pickyFireEvent(string eventType, List<object> exclusions)
     {
-        ModHelper.Console.WriteLine("Using helper method", MessageType.Info);
         IDictionary<string, GlobalMessenger.EventData> dictionary = GlobalMessenger.eventTable;
         lock (dictionary)
         {
