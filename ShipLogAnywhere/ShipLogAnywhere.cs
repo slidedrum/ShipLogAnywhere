@@ -234,7 +234,7 @@ public class ShipLogAnywhere : ModBehaviour
         baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         baseCube.name = "ShipLogMirrorBase";
         baseCube.transform.SetParent(GameObject.Find("MainToolRoot").transform);
-        baseCube.transform.localPosition = new Vector3(0, 1.5f, 2);
+        baseCube.transform.localPosition = new Vector3(0, 0f, 2);
         baseCube.transform.localRotation = Quaternion.identity;
         baseCube.transform.localScale = Vector3.one;
         baseCube.GetComponent<Collider>().enabled = false;
@@ -281,7 +281,7 @@ public class ShipLogAnywhere : ModBehaviour
                 GameObject toolRoot = GameObject.Find("MainToolRoot");
                 ModHelper.Events.Unity.RunWhen(() => GameObject.Find("MainToolRoot") != null, () =>
                 {
-                    Transform cameraRoot = GameObject.Find("Player_Body/ShakeRoot/CameraRoot")?.transform;
+                    Transform cameraRoot = GameObject.Find("MainToolRoot")?.transform;
                     if (cameraRoot != null)
                     {
                         _stowTransform = new GameObject("StowTransform").transform;
@@ -298,6 +298,7 @@ public class ShipLogAnywhere : ModBehaviour
                         lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.up);
                         _holdTransform.transform.rotation = lookRot;
                         _holdTransform.transform.position = offsetPos;
+
                     }
                     else
                     {
