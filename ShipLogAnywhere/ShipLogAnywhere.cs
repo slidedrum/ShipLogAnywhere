@@ -21,13 +21,17 @@ public class ShipLogAnywhere : ModBehaviour
     private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
     GameObject mirrorCamObj;
     GameObject baseCube;
+    GameObject cubePivot;
     GameObject screenQuad;
     Camera mirrorCam;
     Material displayMaterial;
+    RenderTexture mirrorTexture;
+    Transform canvasTransform;
 
+    float resScale = 0.60f;
     float offsetDistance = 0.5f;
     float orthographicSize = 0.33f;
-    float gobjectDistanceToCamera = 1.2f;
+    float gobjectDistanceToCamera = 1.5f;
 
     Dictionary<float, List<Callback>> slowUpdates = new Dictionary<float, List<Callback>>();
     private Dictionary<float, float> _elapsedTimeByInterval = new Dictionary<float, float>();
@@ -35,7 +39,7 @@ public class ShipLogAnywhere : ModBehaviour
     private bool _isPuttingAway;
     private Transform _stowTransform;
     private Transform _holdTransform;
-    DampedSpringQuat _moveSpring = new DampedSpringQuat();
+    DampedSpringQuat _moveSpring = new DampedSpringQuat(15f,0.8f);
     private bool _isEquipped;
     private bool _isCentered;
     float _arrivalDegrees = 1f;
@@ -90,8 +94,8 @@ public class ShipLogAnywhere : ModBehaviour
         {
             float num = (_isPuttingAway ? Time.unscaledDeltaTime : Time.deltaTime);
             Quaternion quaternion = (_isPuttingAway ? _stowTransform.localRotation : _holdTransform.localRotation);
-            baseCube.transform.localRotation = _moveSpring.Update(baseCube.transform.localRotation, quaternion, num);
-            float num2 = Quaternion.Angle(baseCube.transform.localRotation, quaternion);
+            cubePivot.transform.localRotation = _moveSpring.Update(cubePivot.transform.localRotation, quaternion, num);
+            float num2 = Quaternion.Angle(cubePivot.transform.localRotation, quaternion);
             if (_isEquipped && !_isCentered && num2 <= _arrivalDegrees)
             {
                 _isCentered = true;
@@ -100,7 +104,7 @@ public class ShipLogAnywhere : ModBehaviour
             {
                 _isEquipped = false;
                 _isPuttingAway = false;
-                baseCube.SetActive(false);
+                cubePivot.SetActive(false);
                 _moveSpring.ResetVelocity();
             }
         }
@@ -117,7 +121,7 @@ public class ShipLogAnywhere : ModBehaviour
         return this._stowTransform != null && this._holdTransform != null;
     }
 
-    private void SlowUpdate30fps()
+    private void SlowUpdate60fps()
     {
         if (mirrorCam)
         {
@@ -131,7 +135,7 @@ public class ShipLogAnywhere : ModBehaviour
         new Harmony("SlideDrum.ShipLogAnywhere").PatchAll(Assembly.GetExecutingAssembly());
         OnCompleteSceneLoad(OWScene.TitleScreen, OWScene.TitleScreen);
         LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
-        addSlowUpdate(0.033f, SlowUpdate30fps);
+        addSlowUpdate(0.016f, SlowUpdate60fps);
     }
     public void ShowShipComputer()
     {
@@ -143,9 +147,9 @@ public class ShipLogAnywhere : ModBehaviour
         _isCentered = !HasEquipAnimation();
         if (HasEquipAnimation())
         {
-            baseCube.transform.localRotation = _stowTransform.localRotation;
+            cubePivot.transform.localRotation = _stowTransform.localRotation;
         }
-        baseCube.SetActive(true);
+        cubePivot.SetActive(true);
 
         //MoveObjectSmoothly(baseCube.transform, offsetPos, lookRot, 1f);
 
@@ -212,9 +216,20 @@ public class ShipLogAnywhere : ModBehaviour
     public void setupShipLogObject()
     {
         ModHelper.Console.WriteLine("Setting up ship log object", MessageType.Info);
-        RenderTexture mirrorTexture = new RenderTexture((int)(Screen.width * 0.5f), (int)(Screen.height * 0.5f), 0);
+        
+        float targetAspect = 58f / 37f;
+        int maxWidth = (int)(Screen.width * resScale);
+        int maxHeight = (int)(Screen.height * resScale);
+        int width = maxWidth;
+        int height = (int)(width / targetAspect);
+        if (height > maxHeight)
+        {
+            height = maxHeight;
+            width = (int)(height * targetAspect);
+        }
+        mirrorTexture = new RenderTexture(width, height, 0);
         mirrorTexture.Create();
-        Transform canvasTransform = shipLogController._shipLogCanvas.transform;
+        canvasTransform = shipLogController._shipLogCanvas.transform;
         mirrorCamObj = new GameObject("MirrorCamera");
         mirrorCam = mirrorCamObj.AddComponent<Camera>();
 
@@ -231,25 +246,36 @@ public class ShipLogAnywhere : ModBehaviour
         mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
         mirrorCam.enabled = false;
 
+        // Create a pivot object for rotation
+        cubePivot = new GameObject("ShipLogMirrorPivot");
+        cubePivot.transform.SetParent(GameObject.Find("MainToolRoot").transform);
+        cubePivot.transform.localPosition = new Vector3(0, 0f,0);
+        cubePivot.transform.localRotation = Quaternion.identity;
+        cubePivot.SetActive(false);
+
         baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         baseCube.name = "ShipLogMirrorBase";
-        baseCube.transform.SetParent(GameObject.Find("MainToolRoot").transform);
-        baseCube.transform.localPosition = new Vector3(0, 0f, 2);
+        baseCube.transform.SetParent(cubePivot.transform);
+        baseCube.transform.localPosition = new Vector3(0, 0f, -gobjectDistanceToCamera);
         baseCube.transform.localRotation = Quaternion.identity;
-        baseCube.transform.localScale = Vector3.one;
+        float aspectRatio = 58f / 37f;
+        float baseHeight = 1f;
+        float baseWidth = baseHeight * aspectRatio;
+        baseCube.transform.localScale = new Vector3(baseWidth, baseHeight, 1f);
         baseCube.GetComponent<Collider>().enabled = false;
 
         screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         screenQuad.name = "ShipLogScreenFace";
-        screenQuad.transform.SetParent(baseCube.transform);
         screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f); // slightly in front of cube face
         screenQuad.transform.localRotation = Quaternion.Euler(0, 180f, 0);
         float heightScale = 0.9f;
         float widthScale = heightScale * (16f / 9f);
-        screenQuad.transform.localScale = new Vector3(widthScale, heightScale, 1f);
+        //screenQuad.transform.localScale = new Vector3(widthScale, heightScale, 1f);  //uncomment this when using proper object
+        screenQuad.transform.localScale = Vector3.one * 0.9f;
         screenQuad.GetComponent<Collider>().enabled = false;
+        screenQuad.transform.SetParent(baseCube.transform,false);
 
-        // Assign the render texture to the quad's material
+        // Assign the render texture to the quad's material        screenQuad.transform.SetParent(baseCube.transform);
         displayMaterial = new Material(Shader.Find("Unlit/Texture"));
         displayMaterial.mainTexture = mirrorTexture;
         screenQuad.GetComponent<Renderer>().material = displayMaterial;
@@ -318,7 +344,7 @@ public class ShipLogAnywhere : ModBehaviour
             if (!HasEquipAnimation())
             {
                 _isCentered = false;
-                baseCube.SetActive(false);
+                cubePivot.SetActive(false);
                 return;
             }
             if (!_isPuttingAway)
