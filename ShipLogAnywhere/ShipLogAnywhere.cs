@@ -2,6 +2,7 @@
 using OWML.Common;
 using OWML.Logging;
 using OWML.ModHelper;
+using Steamworks;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -20,7 +21,7 @@ public class ShipLogAnywhere : ModBehaviour
     public static ShipLogAnywhere Instance;
     public static ShipLogController shipLogController;
     public static IModHelper modHelper;
-    private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
+    string _selectedInputName = "Autopilot";
     GameObject mirrorCamObj;
     GameObject baseCube;
     GameObject cubePivot;
@@ -29,18 +30,20 @@ public class ShipLogAnywhere : ModBehaviour
     Material displayMaterial;
     RenderTexture mirrorTexture;
     Transform canvasTransform;
-
     float resScale = 0.60f;
     float offsetDistance = 0.5f;
     float orthographicSize = 0.33f;
     public static float gobjectDistanceToCamera = 1.5f;
+    private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
 
     Dictionary<float, List<Callback>> slowUpdates = new Dictionary<float, List<Callback>>();
     private Dictionary<float, float> _elapsedTimeByInterval = new Dictionary<float, float>();
 
-    private string _mode;
-    private bool _requireSuit;
+    public static string _mode;
+    public static bool _requireSuit;
     private PortableShipLogTool portableShipLogTool;
+    private ScreenPrompt _openPrompt;
+
     public void addSlowUpdate(float interval, Callback callback)
     {
         if (slowUpdates.TryGetValue(interval, out var callbackList))
@@ -55,6 +58,7 @@ public class ShipLogAnywhere : ModBehaviour
     }
     private void Update()
     {
+
         foreach (var kvp in slowUpdates)
         {
             float interval = kvp.Key;
@@ -74,13 +78,18 @@ public class ShipLogAnywhere : ModBehaviour
                 _elapsedTimeByInterval[interval] = 0f;
             }
         }
-        if (shipLogController & InGame)
+        if (shipLogController != null && InGame && _openPrompt != null)
         {
-            if (OWInput.IsNewlyPressed(InputLibrary.autopilot, InputMode.Character) && !shipLogController._usingShipLog && portableShipLogTool)
-            {
+            if (OWInput.IsNewlyPressed(GetSelectedInput(), InputMode.Character))
                 portableShipLogTool.EquipTool();
+            if (!(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) && !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) && !shipLogController._usingShipLog)
+            {
+                _openPrompt.SetVisibility(true);
             }
-
+            else
+            {
+                _openPrompt.SetVisibility(false);
+            }
         }
     }
 
@@ -89,7 +98,6 @@ public class ShipLogAnywhere : ModBehaviour
         if (mirrorCam)
         {
             mirrorCam.Render();
-            //mirrorCam.orthographicSize = orthographicSize;
         }
     }
 
@@ -99,7 +107,7 @@ public class ShipLogAnywhere : ModBehaviour
         OnCompleteSceneLoad(OWScene.TitleScreen, OWScene.TitleScreen);
         LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
         addSlowUpdate(0.016f, SlowUpdate60fps);
-        ModHelper.Console.WriteLine("Ship log anywhere starting up!",MessageType.Success);
+        ModHelper.Console.WriteLine("Ship log anywhere starting up!", MessageType.Success);
         Instance = this;
         modHelper = ModHelper;
     }
@@ -108,12 +116,25 @@ public class ShipLogAnywhere : ModBehaviour
         _mode = config.GetSettingsValue<string>("mode");
         _requireSuit = config.GetSettingsValue<bool>("requireSuit");
     }
+    public static IInputCommands GetSelectedInput()
+    {
+        return Instance._selectedInputName switch
+        {
+            "Autopilot" => InputLibrary.autopilot,
+            "Interact" => InputLibrary.interact,
+            "Alt Interact" => InputLibrary.interactSecondary,
+            "Free Look" => InputLibrary.freeLook,
+            "Tool Primary" => InputLibrary.toolActionPrimary,
+            "Tool Secondary" => InputLibrary.toolActionSecondary,
+            _ => null,
+        };
+    }
     public void setupShipLogObject()
     {
         //This will be dramatically simplfied once I get a proper model for it and can set up a prefab.
         //But for now this will all be done in code.
         ModHelper.Console.WriteLine("Setting up ship log object", MessageType.Info);
-        
+
         float targetAspect = 58f / 37f;
         int maxWidth = (int)(Screen.width * resScale);
         int maxHeight = (int)(Screen.height * resScale);
@@ -146,7 +167,7 @@ public class ShipLogAnywhere : ModBehaviour
         // Create a pivot object for rotation
         cubePivot = new GameObject("ShipLogMirrorPivot");
         cubePivot.transform.SetParent(GameObject.Find("MainToolRoot").transform);
-        cubePivot.transform.localPosition = new Vector3(0, 0f,0);
+        cubePivot.transform.localPosition = new Vector3(0, 0f, 0);
         cubePivot.transform.localRotation = Quaternion.identity;
         portableShipLogTool = cubePivot.AddComponent<PortableShipLogTool>();
         //cubePivot.SetActive(false);
@@ -171,7 +192,7 @@ public class ShipLogAnywhere : ModBehaviour
         //screenQuad.transform.localScale = new Vector3(widthScale, heightScale, 1f);  //uncomment this when using proper object
         screenQuad.transform.localScale = Vector3.one * 0.9f;
         screenQuad.GetComponent<Collider>().enabled = false;
-        screenQuad.transform.SetParent(baseCube.transform,false);
+        screenQuad.transform.SetParent(baseCube.transform, false);
 
         // Assign the render texture to the quad's material
         displayMaterial = new Material(Shader.Find("Unlit/Texture"));
@@ -182,6 +203,7 @@ public class ShipLogAnywhere : ModBehaviour
     }
     public void OnCompleteSceneLoad(OWScene previousScene, OWScene newScene)
     {
+        _openPrompt = null;
         if (newScene != OWScene.SolarSystem) return;
         ModHelper.Console.WriteLine("Loaded into solar system!", MessageType.Success);
         ModHelper.Console.WriteLine("Looking for ship log!", MessageType.Info);
@@ -209,6 +231,11 @@ public class ShipLogAnywhere : ModBehaviour
                 });
             }
         }
+        _openPrompt = new ScreenPrompt(GetSelectedInput(), "Open ship log");
+        ModHelper.Events.Unity.RunWhen(() => Locator.GetPromptManager() != null, () =>
+        {
+            Locator.GetPromptManager().AddScreenPrompt(_openPrompt, PromptPosition.UpperRight, true);
+        });
     }
     public void pickyFireEvent(string eventType, List<object> exclusions)
     {

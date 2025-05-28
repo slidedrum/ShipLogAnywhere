@@ -3,15 +3,17 @@ using System;
 using UnityEngine;
 using OWML.ModHelper;
 using OWML.Common;
+using Epic.OnlineServices;
+using System.Linq;
 
 namespace ShipLogAnywhere;
 
 public class PortableShipLogTool : PlayerTool
 {
     private ShipLogController shipLogController;
-
+    private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
     public PortableShipLogTool()
-	{
+    {
         this._moveSpring = new DampedSpringQuat(15f, 0.8f);
         GameObject shipLogObject = GameObject.Find("ShipLog");
         if (shipLogObject == null)
@@ -62,6 +64,13 @@ public class PortableShipLogTool : PlayerTool
 
     public override void EquipTool()
     {
+        if (!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit)
+            return;
+        if (!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged)
+        {
+            NotificationManager.SharedInstance.PostNotification(new NotificationData(NotificationTarget.Player,"Ship Log Unavailable."), false);
+            return;
+        }
         //this is mostly a re-implentation of the ShipLogController.EnterShipComputer() method.
         Locator.GetToolModeSwapper().UnequipTool();
         base.EquipTool();
