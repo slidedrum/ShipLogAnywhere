@@ -43,6 +43,8 @@ public class ShipLogAnywhere : ModBehaviour
     private bool _isEquipped;
     private bool _isCentered;
     float _arrivalDegrees = 1f;
+    private string _mode;
+    private bool _requireSuit;
 
     public void Awake()
     {
@@ -137,6 +139,11 @@ public class ShipLogAnywhere : ModBehaviour
         LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
         addSlowUpdate(0.016f, SlowUpdate60fps);
     }
+    public override void Configure(IModConfig config)
+    {
+        _mode = config.GetSettingsValue<string>("mode");
+        _requireSuit = config.GetSettingsValue<bool>("requireSuit");
+    }
     public void ShowShipComputer()
     {
 
@@ -150,9 +157,6 @@ public class ShipLogAnywhere : ModBehaviour
             cubePivot.transform.localRotation = _stowTransform.localRotation;
         }
         cubePivot.SetActive(true);
-
-        //MoveObjectSmoothly(baseCube.transform, offsetPos, lookRot, 1f);
-
 
         shipLogController.enabled = true;
         shipLogController._usingShipLog = true;

@@ -1,4 +1,22 @@
 {
-  "$schema": "https://raw.githubusercontent.com/ow-mods/owml/master/schemas/config_schema.json",
-  "enabled": true
+    "$schema": "https://raw.githubusercontent.com/ow-mods/owml/master/schemas/config_schema.json",
+    "enabled": true,
+    "settings": {
+        "mode": {
+            "title": "Mode",
+            "type": "selector",
+            "value": "Tool",
+            "options": [
+                "Tool",
+                "Item"
+            ],
+            "tooltip": "Should it be an item you can pick up, or an extra tool you always have?"
+        },
+        "requireSuit": {
+            "title": "Require suit",
+            "type": "toggle",
+            "value": true,
+            "tooltip": "In tool mode, should it require suit to be equiped."
+        }
+    }
 }
