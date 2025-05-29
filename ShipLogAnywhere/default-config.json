@@ -17,6 +17,20 @@
             "type": "toggle",
             "value": true,
             "tooltip": "In tool mode, should it require suit to be equiped."
+        },
+        "inputName": {
+            "title": "Keybinding",
+            "type": "selector",
+            "value": "Autopilot",
+            "options": [
+                "Autopilot",
+                "Interact",
+                "Alt Interact",
+                "Free Look",
+                "Tool Primary",
+                "Tool Secondary"
+            ],
+            "tooltip": "What button do you press to open the ship log?"
         }
     }
 }

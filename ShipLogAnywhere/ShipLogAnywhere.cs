@@ -22,16 +22,9 @@ public class ShipLogAnywhere : ModBehaviour
     public static ShipLogController shipLogController;
     public static IModHelper modHelper;
     string _selectedInputName = "Autopilot";
-    GameObject mirrorCamObj;
-    GameObject baseCube;
-    GameObject cubePivot;
-    GameObject screenQuad;
     Camera mirrorCam;
-    Material displayMaterial;
-    RenderTexture mirrorTexture;
-    Transform canvasTransform;
     float resScale = 0.60f;
-    float offsetDistance = 0.5f;
+    float cameraOffsetDistance = 0.5f;
     float orthographicSize = 0.33f;
     public static float gobjectDistanceToCamera = 1.5f;
     private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
@@ -80,18 +73,16 @@ public class ShipLogAnywhere : ModBehaviour
         }
         if (shipLogController != null && InGame && _openPrompt != null)
         {
-            if (OWInput.IsNewlyPressed(GetSelectedInput(), InputMode.Character))
-                portableShipLogTool.EquipTool();
+            _openPrompt.SetVisibility(false);
             if (!(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) && 
                 !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) && 
                 !PlayerState._usingShipComputer && 
-                !PlayerState._insideShip)
+                !PlayerState._insideShip &&
+                !otherPromptWithSameKeyVisible())
             {
                 _openPrompt.SetVisibility(true);
-            }
-            else
-            {
-                _openPrompt.SetVisibility(false);
+                if (OWInput.IsNewlyPressed(GetSelectedInput(), InputMode.Character))
+                    portableShipLogTool.EquipTool();
             }
         }
     }
@@ -119,6 +110,9 @@ public class ShipLogAnywhere : ModBehaviour
     {
         _mode = config.GetSettingsValue<string>("mode");
         _requireSuit = config.GetSettingsValue<bool>("requireSuit");
+        _selectedInputName = config.GetSettingsValue<string>("inputName");
+        if (_openPrompt != null)
+            setupPrompt();
     }
     public static IInputCommands GetSelectedInput()
     {
@@ -149,10 +143,10 @@ public class ShipLogAnywhere : ModBehaviour
             height = maxHeight;
             width = (int)(height * targetAspect);
         }
-        mirrorTexture = new RenderTexture(width, height, 0);
+        RenderTexture mirrorTexture = new RenderTexture(width, height, 0);
         mirrorTexture.Create();
-        canvasTransform = shipLogController._shipLogCanvas.transform;
-        mirrorCamObj = new GameObject("MirrorCamera");
+        Transform canvasTransform = shipLogController._shipLogCanvas.transform;
+        GameObject mirrorCamObj = new GameObject("MirrorCamera");
         mirrorCam = mirrorCamObj.AddComponent<Camera>();
 
         int canvasLayer = shipLogController._shipLogCanvas.gameObject.layer;
@@ -160,23 +154,23 @@ public class ShipLogAnywhere : ModBehaviour
         mirrorCam.orthographic = true;
         mirrorCam.targetTexture = mirrorTexture;
         mirrorCam.orthographicSize = orthographicSize;
-        mirrorCam.farClipPlane = offsetDistance * 2;
+        mirrorCam.farClipPlane = cameraOffsetDistance * 2;
 
-        Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * offsetDistance;
+        Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * cameraOffsetDistance;
         mirrorCamObj.transform.position = mirrorCamPosition;
         mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
         mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
         mirrorCam.enabled = false;
 
         // Create a pivot object for rotation
-        cubePivot = new GameObject("ShipLogMirrorPivot");
+        GameObject cubePivot = new GameObject("ShipLogMirrorPivot");
         cubePivot.transform.SetParent(GameObject.Find("MainToolRoot").transform);
         cubePivot.transform.localPosition = new Vector3(0, 0f, 0);
         cubePivot.transform.localRotation = Quaternion.identity;
         portableShipLogTool = cubePivot.AddComponent<PortableShipLogTool>();
         //cubePivot.SetActive(false);
 
-        baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        GameObject baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         baseCube.name = "ShipLogMirrorBase";
         baseCube.transform.SetParent(cubePivot.transform);
         baseCube.transform.localPosition = new Vector3(0, 0f, -gobjectDistanceToCamera);
@@ -187,7 +181,7 @@ public class ShipLogAnywhere : ModBehaviour
         baseCube.transform.localScale = new Vector3(baseWidth, baseHeight, 1f);
         baseCube.GetComponent<Collider>().enabled = false;
 
-        screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        GameObject screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         screenQuad.name = "ShipLogScreenFace";
         screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f);
         screenQuad.transform.localRotation = Quaternion.Euler(0, 180f, 0);
@@ -199,7 +193,7 @@ public class ShipLogAnywhere : ModBehaviour
         screenQuad.transform.SetParent(baseCube.transform, false);
 
         // Assign the render texture to the quad's material
-        displayMaterial = new Material(Shader.Find("Unlit/Texture"));
+        Material displayMaterial = new Material(Shader.Find("Unlit/Texture"));
         displayMaterial.mainTexture = mirrorTexture;
         screenQuad.GetComponent<Renderer>().material = displayMaterial;
         screenQuad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -235,24 +229,16 @@ public class ShipLogAnywhere : ModBehaviour
                 });
             }
         }
-        foreach (string key in GlobalMessenger.eventTable.Keys)
-        {
-            modHelper.Console.WriteLine(key);
-        }
-        foreach (Callback callback in GlobalMessenger.eventTable["EnterShip"].callbacks)
-        {
-            modHelper.Console.WriteLine($"({callback.Target}){callback.Method.DeclaringType}.{callback.Method.Name}");
-        }
 
     }
-
+    public bool otherPromptWithSameKeyVisible()
+    {
+        return false;
+    }
     private void setupPrompt()
     {
-        if (_openPrompt != null)
-        {
-            _openPrompt = null;
-            Locator.GetPromptManager().RemoveScreenPrompt(_openPrompt);
-        }
+        Locator.GetPromptManager().RemoveScreenPrompt(_openPrompt);
+        _openPrompt = null;;
         ModHelper.Console.WriteLine("Setting up prompt");
         _openPrompt = new ScreenPrompt(GetSelectedInput(), "Open ship log");
         Locator.GetPromptManager().AddScreenPrompt(_openPrompt, PromptPosition.UpperRight, false);
