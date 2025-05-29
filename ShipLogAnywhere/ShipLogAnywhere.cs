@@ -1,18 +1,11 @@
 ﻿using HarmonyLib;
 using OWML.Common;
-using OWML.Logging;
 using OWML.ModHelper;
-using Steamworks;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.EnterpriseServices.CompensatingResourceManager;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Reflection;
-using Unity.Collections;
 using UnityEngine;
-using UnityEngine.UI;
 
 
 namespace ShipLogAnywhere;

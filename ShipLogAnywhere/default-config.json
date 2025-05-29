@@ -10,7 +10,7 @@
                 "Tool",
                 "Item"
             ],
-            "tooltip": "Should it be an item you can pick up, or an extra tool you always have?"
+            "tooltip": "Should it be an item you can pick up, or an extra tool you always have? (unimplemented)"
         },
         "requireSuit": {
             "title": "Require suit",
