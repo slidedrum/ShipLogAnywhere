@@ -82,7 +82,10 @@ public class ShipLogAnywhere : ModBehaviour
         {
             if (OWInput.IsNewlyPressed(GetSelectedInput(), InputMode.Character))
                 portableShipLogTool.EquipTool();
-            if (!(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) && !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) && !shipLogController._usingShipLog)
+            if (!(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) && 
+                !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) && 
+                !PlayerState._usingShipComputer && 
+                !PlayerState._insideShip)
             {
                 _openPrompt.SetVisibility(true);
             }
@@ -110,6 +113,7 @@ public class ShipLogAnywhere : ModBehaviour
         ModHelper.Console.WriteLine("Ship log anywhere starting up!", MessageType.Success);
         Instance = this;
         modHelper = ModHelper;
+        GlobalMessenger.AddListener("FinishOpenEyes", setupPrompt);
     }
     public override void Configure(IModConfig config)
     {
@@ -231,12 +235,29 @@ public class ShipLogAnywhere : ModBehaviour
                 });
             }
         }
-        _openPrompt = new ScreenPrompt(GetSelectedInput(), "Open ship log");
-        ModHelper.Events.Unity.RunWhen(() => Locator.GetPromptManager() != null, () =>
+        foreach (string key in GlobalMessenger.eventTable.Keys)
         {
-            Locator.GetPromptManager().AddScreenPrompt(_openPrompt, PromptPosition.UpperRight, true);
-        });
+            modHelper.Console.WriteLine(key);
+        }
+        foreach (Callback callback in GlobalMessenger.eventTable["EnterShip"].callbacks)
+        {
+            modHelper.Console.WriteLine($"({callback.Target}){callback.Method.DeclaringType}.{callback.Method.Name}");
+        }
+
     }
+
+    private void setupPrompt()
+    {
+        if (_openPrompt != null)
+        {
+            _openPrompt = null;
+            Locator.GetPromptManager().RemoveScreenPrompt(_openPrompt);
+        }
+        ModHelper.Console.WriteLine("Setting up prompt");
+        _openPrompt = new ScreenPrompt(GetSelectedInput(), "Open ship log");
+        Locator.GetPromptManager().AddScreenPrompt(_openPrompt, PromptPosition.UpperRight, false);
+    }
+
     public void pickyFireEvent(string eventType, List<object> exclusions)
     {
         IDictionary<string, GlobalMessenger.EventData> dictionary = GlobalMessenger.eventTable;
@@ -255,7 +276,7 @@ public class ShipLogAnywhere : ModBehaviour
                 {
                     try
                     {
-                        if (!exclusions.Contains(eventData.temp[i].Target)) //extra check to avoid notifying player camera
+                        if (!exclusions.Contains(eventData.temp[i].Target)) //extra check to avoid notifying
                             eventData.temp[i]();
                     }
                     catch (Exception ex)
