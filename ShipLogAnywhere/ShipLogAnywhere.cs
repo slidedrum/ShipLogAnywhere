@@ -246,19 +246,19 @@ public class ShipLogAnywhere : ModBehaviour
 
         if (visiblePrompt != null)
         {
-            ModHelper.Console.WriteLine($"Conflicting prompt {visiblePrompt._textStr}",MessageType.Warning);
+            ModHelper.Console.WriteLine($"Conflicting prompt {visiblePrompt._textStr}",MessageType.Debug);
             return true;
         }
         return false;
     }
 
-    public void checkForConflictingPrompts()
+    public void checkForConflictingPrompts() //TODO: Make this hook into prompt manager and only update when the promtp lists are updated, instead of looping through them all
     {
         controllerConflictingPrompts = new HashSet<ScreenPromptElement>();
         keyboardConflictingPrompts = new HashSet<ScreenPromptElement>();
 
-        var input = GetSelectedInput(); // Store selected input once
-        var promptManager = Locator.GetPromptManager(); // Store prompt manager once
+        var input = GetSelectedInput();
+        var promptManager = Locator.GetPromptManager();
 
         foreach (PromptPosition position in Enum.GetValues(typeof(PromptPosition)))
         {
@@ -273,54 +273,16 @@ public class ShipLogAnywhere : ModBehaviour
                 foreach (IInputCommands command in promptData.GetInputCommandList())
                 {
                     if (command.HasSameBinding(input, true))
-                    {
                         controllerConflictingPrompts.Add(prompt);
-                        ModHelper.Console.WriteLine($"Conflicting controller prompt {prompt._textStr}");
-                    }
                     if (command.HasSameBinding(input, false))
-                    {
                         keyboardConflictingPrompts.Add(prompt);
-                        ModHelper.Console.WriteLine($"Conflicting keyboard prompt {prompt._textStr}");
-                    }
-                }
-            }
-        }
-    }
-
-    public void checkForConflictingPromptsBackup()
-    {
-        controllerConflictingPrompts = new();
-        keyboardConflictingPrompts = new();
-        foreach (PromptPosition position in Enum.GetValues(typeof(PromptPosition)))
-        {
-            ScreenPromptList screenPromptList = Locator.GetPromptManager().GetScreenPromptList(position);
-            if (screenPromptList != null && screenPromptList._listPromptUiElements != null)
-            {
-                foreach (var prompt in screenPromptList._listPromptUiElements)
-                {
-                    if (prompt != null && prompt.GetPromptData() != null && prompt.GetPromptData() != _openPrompt && prompt.GetPromptData().GetInputCommandList() != null)
-                    {
-                        foreach (IInputCommands command in prompt.GetPromptData().GetInputCommandList())
-                        {
-                            var input = GetSelectedInput();
-                            if (command.HasSameBinding(input, true))
-                            {
-                                controllerConflictingPrompts.Add(prompt);
-                                ModHelper.Console.WriteLine($"Conflicting controller prompt {prompt._textStr}");
-                            }
-                            if (command.HasSameBinding(input, false))
-                            {
-                                keyboardConflictingPrompts.Add(prompt);
-                                ModHelper.Console.WriteLine($"Conflicting keyboard prompt {prompt._textStr}");
-                            }
-                        }
-                    }
                 }
             }
         }
     }
     private void setupPrompt()
     {
+        checkForConflictingPrompts();
         Locator.GetPromptManager().RemoveScreenPrompt(_openPrompt);
         _openPrompt = null; ;
         ModHelper.Console.WriteLine("Setting up prompt");
