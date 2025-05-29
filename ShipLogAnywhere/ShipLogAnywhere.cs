@@ -74,11 +74,12 @@ public class ShipLogAnywhere : ModBehaviour
         if (shipLogController != null && InGame && _openPrompt != null)
         {
             _openPrompt.SetVisibility(false);
-            if (!(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) && 
-                !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) && 
-                !PlayerState._usingShipComputer && 
+            if (!(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) &&
+                !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) &&
+                !PlayerState._usingShipComputer &&
                 !PlayerState._insideShip &&
-                !otherPromptWithSameKeyVisible())
+                !otherPromptWithSameKeyVisible() &&
+                OWInput.IsInputMode(InputMode.Character))
             {
                 _openPrompt.SetVisibility(true);
                 if (OWInput.IsNewlyPressed(GetSelectedInput(), InputMode.Character))
@@ -238,7 +239,7 @@ public class ShipLogAnywhere : ModBehaviour
     private void setupPrompt()
     {
         Locator.GetPromptManager().RemoveScreenPrompt(_openPrompt);
-        _openPrompt = null;;
+        _openPrompt = null; ;
         ModHelper.Console.WriteLine("Setting up prompt");
         _openPrompt = new ScreenPrompt(GetSelectedInput(), "Open ship log");
         Locator.GetPromptManager().AddScreenPrompt(_openPrompt, PromptPosition.UpperRight, false);
