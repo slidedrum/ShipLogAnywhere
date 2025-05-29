@@ -23,6 +23,7 @@ public class ShipLogAnywhere : ModBehaviour
     public static ShipLogController shipLogController;
     public static IModHelper modHelper;
     string _selectedInputName = "Autopilot";
+    private bool _keybindCompat;
     Camera mirrorCam;
     float resScale = 0.60f;
     float cameraOffsetDistance = 0.5f;
@@ -37,8 +38,8 @@ public class ShipLogAnywhere : ModBehaviour
     public static bool _requireSuit;
     private PortableShipLogTool portableShipLogTool;
     private ScreenPrompt _openPrompt;
-    private List<ScreenPromptElement> controllerConflictingPrompts;
-    private List<ScreenPromptElement> keyboardConflictingPrompts;
+    private HashSet<ScreenPromptElement> controllerConflictingPrompts;
+    private HashSet<ScreenPromptElement> keyboardConflictingPrompts;
 
     public void addSlowUpdate(float interval, Callback callback)
     {
@@ -114,6 +115,7 @@ public class ShipLogAnywhere : ModBehaviour
         _mode = config.GetSettingsValue<string>("mode");
         _requireSuit = config.GetSettingsValue<bool>("requireSuit");
         _selectedInputName = config.GetSettingsValue<string>("inputName");
+        _keybindCompat = config.GetSettingsValue<bool>("keybindCompat");
         if (_openPrompt != null)
             setupPrompt();
     }
@@ -236,18 +238,56 @@ public class ShipLogAnywhere : ModBehaviour
     }
     public bool otherPromptWithSameKeyVisible()
     {
+        if (!_keybindCompat)
+            return false;
+        checkForConflictingPrompts();
         var conflictingPrompts = OWInput.UsingGamepad() ? controllerConflictingPrompts : keyboardConflictingPrompts;
-        bool hasVisiblePrompt = conflictingPrompts.Any(prompt => prompt.isActiveAndEnabled);
+        ScreenPromptElement visiblePrompt = conflictingPrompts.FirstOrDefault(prompt => prompt.isActiveAndEnabled);
 
-        if (hasVisiblePrompt)
+        if (visiblePrompt != null)
         {
-            var visiblePrompt = conflictingPrompts.First(prompt => prompt.isActiveAndEnabled);
-            ModHelper.Console.WriteLine($"Conflicting prompt {visiblePrompt._textStr}");
+            ModHelper.Console.WriteLine($"Conflicting prompt {visiblePrompt._textStr}",MessageType.Warning);
+            return true;
         }
-
-        return hasVisiblePrompt;
+        return false;
     }
+
     public void checkForConflictingPrompts()
+    {
+        controllerConflictingPrompts = new HashSet<ScreenPromptElement>();
+        keyboardConflictingPrompts = new HashSet<ScreenPromptElement>();
+
+        var input = GetSelectedInput(); // Store selected input once
+        var promptManager = Locator.GetPromptManager(); // Store prompt manager once
+
+        foreach (PromptPosition position in Enum.GetValues(typeof(PromptPosition)))
+        {
+            ScreenPromptList screenPromptList = promptManager.GetScreenPromptList(position);
+            if (screenPromptList?._listPromptUiElements == null) continue;
+
+            foreach (var prompt in screenPromptList._listPromptUiElements)
+            {
+                var promptData = prompt?.GetPromptData();
+                if (promptData == null || promptData == _openPrompt) continue;
+
+                foreach (IInputCommands command in promptData.GetInputCommandList())
+                {
+                    if (command.HasSameBinding(input, true))
+                    {
+                        controllerConflictingPrompts.Add(prompt);
+                        ModHelper.Console.WriteLine($"Conflicting controller prompt {prompt._textStr}");
+                    }
+                    if (command.HasSameBinding(input, false))
+                    {
+                        keyboardConflictingPrompts.Add(prompt);
+                        ModHelper.Console.WriteLine($"Conflicting keyboard prompt {prompt._textStr}");
+                    }
+                }
+            }
+        }
+    }
+
+    public void checkForConflictingPromptsBackup()
     {
         controllerConflictingPrompts = new();
         keyboardConflictingPrompts = new();
@@ -258,7 +298,7 @@ public class ShipLogAnywhere : ModBehaviour
             {
                 foreach (var prompt in screenPromptList._listPromptUiElements)
                 {
-                    if (prompt != null && prompt.GetPromptData() != null && prompt.GetPromptData().GetInputCommandList() != null)
+                    if (prompt != null && prompt.GetPromptData() != null && prompt.GetPromptData() != _openPrompt && prompt.GetPromptData().GetInputCommandList() != null)
                     {
                         foreach (IInputCommands command in prompt.GetPromptData().GetInputCommandList())
                         {
@@ -266,10 +306,12 @@ public class ShipLogAnywhere : ModBehaviour
                             if (command.HasSameBinding(input, true))
                             {
                                 controllerConflictingPrompts.Add(prompt);
+                                ModHelper.Console.WriteLine($"Conflicting controller prompt {prompt._textStr}");
                             }
                             if (command.HasSameBinding(input, false))
                             {
                                 keyboardConflictingPrompts.Add(prompt);
+                                ModHelper.Console.WriteLine($"Conflicting keyboard prompt {prompt._textStr}");
                             }
                         }
                     }
@@ -279,7 +321,6 @@ public class ShipLogAnywhere : ModBehaviour
     }
     private void setupPrompt()
     {
-        checkForConflictingPrompts();
         Locator.GetPromptManager().RemoveScreenPrompt(_openPrompt);
         _openPrompt = null; ;
         ModHelper.Console.WriteLine("Setting up prompt");

@@ -31,6 +31,12 @@
                 "Tool Secondary"
             ],
             "tooltip": "What button do you press to open the ship log?"
+        },
+        "keybindCompat": {
+            "title": "Keybinding compatablity check",
+            "type": "toggle",
+            "value": true,
+            "tooltip": "Should this keybind have a lower priority?  Allows you to set the keybinding to something that's already in use.  Introduces minor stutter when opening portable ship log."
         }
     }
 }
