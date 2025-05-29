@@ -239,19 +239,19 @@ public class ShipLogAnywhere : ModBehaviour
 
         if (visiblePrompt != null)
         {
-            ModHelper.Console.WriteLine($"Conflicting prompt {visiblePrompt._textStr}",MessageType.Debug);
+            ModHelper.Console.WriteLine($"Conflicting prompt {visiblePrompt._textStr}", MessageType.Warning);
             return true;
         }
         return false;
     }
 
-    public void checkForConflictingPrompts() //TODO: Make this hook into prompt manager and only update when the promtp lists are updated, instead of looping through them all
+    public void checkForConflictingPrompts()
     {
         controllerConflictingPrompts = new HashSet<ScreenPromptElement>();
         keyboardConflictingPrompts = new HashSet<ScreenPromptElement>();
 
-        var input = GetSelectedInput();
-        var promptManager = Locator.GetPromptManager();
+        var input = GetSelectedInput(); // Store selected input once
+        var promptManager = Locator.GetPromptManager(); // Store prompt manager once
 
         foreach (PromptPosition position in Enum.GetValues(typeof(PromptPosition)))
         {
@@ -266,9 +266,15 @@ public class ShipLogAnywhere : ModBehaviour
                 foreach (IInputCommands command in promptData.GetInputCommandList())
                 {
                     if (command.HasSameBinding(input, true))
+                    {
                         controllerConflictingPrompts.Add(prompt);
+                        ModHelper.Console.WriteLine($"Conflicting controller prompt {prompt._textStr}");
+                    }
                     if (command.HasSameBinding(input, false))
+                    {
                         keyboardConflictingPrompts.Add(prompt);
+                        ModHelper.Console.WriteLine($"Conflicting keyboard prompt {prompt._textStr}");
+                    }
                 }
             }
         }
