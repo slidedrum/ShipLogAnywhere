@@ -286,41 +286,9 @@ public class ShipLogAnywhere : ModBehaviour
             }
         }
     }
-
-    public void checkForConflictingPromptsBackup()
-    {
-        controllerConflictingPrompts = new();
-        keyboardConflictingPrompts = new();
-        foreach (PromptPosition position in Enum.GetValues(typeof(PromptPosition)))
-        {
-            ScreenPromptList screenPromptList = Locator.GetPromptManager().GetScreenPromptList(position);
-            if (screenPromptList != null && screenPromptList._listPromptUiElements != null)
-            {
-                foreach (var prompt in screenPromptList._listPromptUiElements)
-                {
-                    if (prompt != null && prompt.GetPromptData() != null && prompt.GetPromptData() != _openPrompt && prompt.GetPromptData().GetInputCommandList() != null)
-                    {
-                        foreach (IInputCommands command in prompt.GetPromptData().GetInputCommandList())
-                        {
-                            var input = GetSelectedInput();
-                            if (command.HasSameBinding(input, true))
-                            {
-                                controllerConflictingPrompts.Add(prompt);
-                                ModHelper.Console.WriteLine($"Conflicting controller prompt {prompt._textStr}");
-                            }
-                            if (command.HasSameBinding(input, false))
-                            {
-                                keyboardConflictingPrompts.Add(prompt);
-                                ModHelper.Console.WriteLine($"Conflicting keyboard prompt {prompt._textStr}");
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
     private void setupPrompt()
     {
+        checkForConflictingPrompts();
         Locator.GetPromptManager().RemoveScreenPrompt(_openPrompt);
         _openPrompt = null; ;
         ModHelper.Console.WriteLine("Setting up prompt");
