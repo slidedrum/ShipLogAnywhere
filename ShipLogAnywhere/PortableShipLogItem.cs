@@ -13,9 +13,9 @@ public class PortableShipLogItem : OWItem
     public bool _holding = false;
     public bool _looking = false;
     Vector3 baseScale;
-    DampedSpringQuat _moveSpring = new DampedSpringQuat();
-    DampedSpring3D _positionSpring = new DampedSpring3D();
-    DampedSpring3D _scaleSpring = new DampedSpring3D();
+    DampedSpringQuat _moveSpring = new DampedSpringQuat(15f, 0.8f);
+    DampedSpring3D _positionSpring = new DampedSpring3D(15f, 0.8f);
+    DampedSpring3D _scaleSpring = new DampedSpring3D(15f, 0.8f);
     private Vector3 targetPosition;
     private Vector3 targetScale;
     public PortableShipLogItem()
@@ -60,8 +60,16 @@ public class PortableShipLogItem : OWItem
             downGO.transform.SetParent(this.transform, false);
             _downTransform = downGO.transform;
         }
+        if (baseScale == Vector3.zero)
+            baseScale = this.transform.localScale;
 
-        this.baseScale = this.transform.localScale;
+        Transform cameraTransform = Locator.GetPlayerCamera().transform;
+        Vector3 worldTargetPosition = cameraTransform.position + cameraTransform.forward * 0.5f;
+        this._upTransform.localPosition = this.transform.parent.InverseTransformPoint(worldTargetPosition);
+        Quaternion worldLookRotation = Quaternion.LookRotation(cameraTransform.position - worldTargetPosition, cameraTransform.up);
+        Quaternion localLookRotation = Quaternion.Inverse(this.transform.parent.rotation) * worldLookRotation;
+        this._upTransform.localRotation = localLookRotation;
+        this._upTransform.localScale = baseScale;
 
         // Set down transform as before
         this._downTransform.localPosition = new Vector3(0f, -0.2f, 0.1f);
@@ -117,13 +125,15 @@ public class PortableShipLogItem : OWItem
         }
         this._looking = true;
 
-        Transform cameraTransform = Locator.GetPlayerCamera().transform;
-        Vector3 worldTargetPosition = cameraTransform.position + cameraTransform.forward * 0.5f;
-        this._upTransform.localPosition = this.transform.parent.InverseTransformPoint(worldTargetPosition);
-        Quaternion worldLookRotation = Quaternion.LookRotation(cameraTransform.position - worldTargetPosition, cameraTransform.up);
-        Quaternion localLookRotation = Quaternion.Inverse(this.transform.parent.rotation) * worldLookRotation;
-        this._upTransform.localRotation = localLookRotation;
-        this._upTransform.localScale = baseScale;
+        setUpTransforms();  //I don't understand why this needs to be here.  It probably doesn't but it works and I'm tired of messing with it.
+
+        //Transform cameraTransform = Locator.GetPlayerCamera().transform;
+        //Vector3 worldTargetPosition = cameraTransform.position + cameraTransform.forward * 0.5f;
+        //this._upTransform.localPosition = this.transform.parent.InverseTransformPoint(worldTargetPosition);
+        //Quaternion worldLookRotation = Quaternion.LookRotation(cameraTransform.position - worldTargetPosition, cameraTransform.up);
+        //Quaternion localLookRotation = Quaternion.Inverse(this.transform.parent.rotation) * worldLookRotation;
+        //this._upTransform.localRotation = localLookRotation;
+        //this._upTransform.localScale = baseScale;
 
 
         //this is mostly a re-implentation of the ShipLogController.EnterShipComputer() method.

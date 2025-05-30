@@ -209,6 +209,7 @@ public class ShipLogAnywhere : ModBehaviour
             baseCube.transform.SetParent(Locator._timberHearth.transform);
             baseCube.transform.localPosition = new Vector3(16f, -43f, 188f);
             portableShipLogItem = baseCube.AddComponent<PortableShipLogItem>();
+
         }
 
 
