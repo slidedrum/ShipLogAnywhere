@@ -184,6 +184,10 @@ public class ShipLogAnywhere : ModBehaviour
 
         GameObject baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         baseCube.name = "ShipLogMirrorBase";
+        baseCube.transform.localRotation = Quaternion.identity;
+        float baseHeight = 1f;
+        float baseWidth = baseHeight * targetAspect;
+        baseCube.transform.localScale = new Vector3(baseWidth, baseHeight, 1f);
 
         if (_mode == "Tool")
         {
@@ -204,10 +208,7 @@ public class ShipLogAnywhere : ModBehaviour
             portableShipLogItem = baseCube.AddComponent<PortableShipLogItem>();
         }
 
-        baseCube.transform.localRotation = Quaternion.identity;
-        float baseHeight = 1f;
-        float baseWidth = baseHeight * targetAspect;
-        baseCube.transform.localScale = new Vector3(baseWidth, baseHeight, 1f);
+
 
         GameObject screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         screenQuad.name = "ShipLogScreenFace";
