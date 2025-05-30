@@ -23,22 +23,21 @@ public class PortableShipLogTool : PlayerTool
         }
         ShipLogAnywhere.modHelper.Events.Unity.RunWhen(() => GameObject.Find("MainToolRoot") != null, () =>
         {
-            GameObject toolRoot = GameObject.Find("MainToolRoot");
-            Transform cameraRoot = GameObject.Find("MainToolRoot")?.transform;
-            if (cameraRoot != null)
+            Transform toolRoot = GameObject.Find("MainToolRoot")?.transform;
+            if (toolRoot != null)
             {
                 this._stowTransform = new GameObject("StowTransform").transform;
-                this._stowTransform.SetParent(cameraRoot, false);
+                this._stowTransform.SetParent(toolRoot, false);
 
                 this._holdTransform = new GameObject("HoldTransform").transform;
-                this._holdTransform.SetParent(cameraRoot, false);
+                this._holdTransform.SetParent(toolRoot, false);
 
-                Vector3 offsetPos = cameraRoot.position + -cameraRoot.up * ShipLogAnywhere.gobjectDistanceToCamera;
-                Quaternion lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.forward);
+                Vector3 offsetPos = toolRoot.position + -toolRoot.up * ShipLogAnywhere.gobjectDistanceToCamera;
+                Quaternion lookRot = Quaternion.LookRotation(toolRoot.position - offsetPos, toolRoot.forward);
                 this._stowTransform.transform.rotation = lookRot;
                 this._stowTransform.transform.position = offsetPos;
-                offsetPos = cameraRoot.position + cameraRoot.forward * ShipLogAnywhere.gobjectDistanceToCamera;
-                lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.up);
+                offsetPos = toolRoot.position + toolRoot.forward * ShipLogAnywhere.gobjectDistanceToCamera;
+                lookRot = Quaternion.LookRotation(toolRoot.position - offsetPos, toolRoot.up);
                 this._holdTransform.transform.rotation = lookRot;
                 this._holdTransform.transform.position = offsetPos;
                 ShipLogAnywhere.modHelper.Console.WriteLine("Set up transforms", MessageType.Success);

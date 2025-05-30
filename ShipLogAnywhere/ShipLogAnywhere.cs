@@ -97,6 +97,8 @@ public class ShipLogAnywhere : ModBehaviour
                 }
             }
         }
+        if (portableShipLogItem != null)
+            portableShipLogItem.Update();
     }
 
     private void SlowUpdate60fps()
@@ -118,6 +120,7 @@ public class ShipLogAnywhere : ModBehaviour
         modHelper = ModHelper;
         GlobalMessenger.AddListener("FinishOpenEyes", setupPrompt);
         PortableShipLogType = EnumUtils.Create<ItemType>("PortableShipLog");
+
     }
     public override void Configure(IModConfig config)
     {

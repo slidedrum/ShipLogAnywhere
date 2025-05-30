@@ -13,30 +13,21 @@ public class PortableShipLogItem : OWItem
     public bool _holding = false;
     public bool _looking = false;
     Vector3 baseScale;
+    DampedSpringQuat _moveSpring = new DampedSpringQuat();
+    DampedSpring3D _positionSpring = new DampedSpring3D();
+    DampedSpring3D _scaleSpring = new DampedSpring3D();
+    private Vector3 targetPosition;
+    private Vector3 targetScale;
     public PortableShipLogItem()
     {
-        GameObject shipLogObject = GameObject.Find("ShipLog");
-        if (shipLogObject == null)
-        {
-            ShipLogAnywhere.modHelper.Console.WriteLine("Could not find ship log gobject!", MessageType.Error);
-            return;
-        }
-        else
-        {
-            shipLogController = shipLogObject.GetComponent<ShipLogController>();
-        }
-        baseScale = this.transform.localScale;
-        GlobalMessenger.AddListener("ExitShipComputer", OnExitShipComputer);
+
     }
 
     private void OnExitShipComputer()
     {
-        if (_looking == true)
+        if (this._looking == true)
         {
             this._looking = false;
-            this.transform.localPosition = new Vector3(0f, -0.2f, 0.1f);
-            this.transform.localRotation = Quaternion.Euler(0f, 240f, 0f);
-            this.transform.localScale = baseScale * 0.5f;
         }
     }
 
@@ -44,14 +35,61 @@ public class PortableShipLogItem : OWItem
     {
         base.Awake();
         _type = ItemType;
+        GameObject shipLogObject = GameObject.Find("ShipLog");
+        if (shipLogObject == null)
+        {
+            ShipLogAnywhere.modHelper.Console.WriteLine("Could not find ship log gobject!", MessageType.Error);
+            return;
+        }
+        shipLogController = shipLogObject.GetComponent<ShipLogController>();
+        setUpTransforms();
+        GlobalMessenger.AddListener("ExitShipComputer", OnExitShipComputer);
+    }
+    public void setUpTransforms()
+    {
+        if (_upTransform == null)
+        {
+            GameObject upGO = new GameObject("UpTransform");
+            upGO.transform.SetParent(this.transform, false);
+            _upTransform = upGO.transform;
+        }
+
+        if (_downTransform == null)
+        {
+            GameObject downGO = new GameObject("DownTransform");
+            downGO.transform.SetParent(this.transform, false);
+            _downTransform = downGO.transform;
+        }
+
+        this.baseScale = this.transform.localScale;
+
+        // Set down transform as before
+        this._downTransform.localPosition = new Vector3(0f, -0.2f, 0.1f);
+        this._downTransform.localRotation = Quaternion.Euler(0f, 240f, 0f);
+        this._downTransform.localScale = this.baseScale * 0.5f;
+
+        ShipLogAnywhere.modHelper.Console.WriteLine("Set up transforms for item", MessageType.Success);
+    }
+
+    public void Update()
+    {
+        if (_holding)
+        {
+            Quaternion quaternion = (this._looking ? this._upTransform.localRotation : this._downTransform.localRotation);
+            base.transform.localRotation = this._moveSpring.Update(base.transform.localRotation, quaternion, Time.deltaTime);
+            targetPosition = this._looking ? this._upTransform.localPosition : this._downTransform.localPosition;
+            this.transform.localPosition = _positionSpring.Update(this.transform.localPosition, targetPosition, Time.deltaTime);
+            targetScale = this._looking ? this._upTransform.localScale : this._downTransform.localScale;
+            this.transform.localScale = _scaleSpring.Update(this.transform.localScale, targetScale, Time.deltaTime);
+        }
     }
     public override void PickUpItem(Transform holdTranform)
     {
+        
         base.PickUpItem(holdTranform);
-        this.transform.localPosition = new Vector3(0f, - 0.2f, 0.1f);
-        this.transform.localRotation = Quaternion.Euler(0f, 240f, 0f);
-        this.transform.localScale = baseScale * 0.5f;
+        this._looking = false;
         this._holding = true;
+        this.transform.localScale = this.baseScale * 0.2f;
     }
     public override void DropItem(Vector3 position, Vector3 normal, Transform parent, Sector sector, IItemDropTarget customDropTarget)
     {
@@ -59,7 +97,7 @@ public class PortableShipLogItem : OWItem
 
         var playerTransform = Locator._playerBody.transform;
         this.transform.rotation = Quaternion.LookRotation(playerTransform.up, -playerTransform.forward);
-        this.transform.localScale = baseScale;
+        this.transform.localScale = this.baseScale;
         this._holding = false;
     }
     public override string GetDisplayName()
@@ -73,20 +111,19 @@ public class PortableShipLogItem : OWItem
             NotificationManager.SharedInstance.PostNotification(new NotificationData(NotificationTarget.Player, "Ship Log Unavailable."), false);
             return;
         }
-        if (_looking == true)
+        if (this._looking == true)
         {
             return;
         }
-        _looking = true;
-
+        this._looking = true;
 
         Transform cameraTransform = Locator.GetPlayerCamera().transform;
         Vector3 worldTargetPosition = cameraTransform.position + cameraTransform.forward * 0.5f;
-        this.transform.localPosition = this.transform.parent.InverseTransformPoint(worldTargetPosition);
+        this._upTransform.localPosition = this.transform.parent.InverseTransformPoint(worldTargetPosition);
         Quaternion worldLookRotation = Quaternion.LookRotation(cameraTransform.position - worldTargetPosition, cameraTransform.up);
         Quaternion localLookRotation = Quaternion.Inverse(this.transform.parent.rotation) * worldLookRotation;
-        this.transform.localRotation = localLookRotation;
-        this.transform.localScale = baseScale;
+        this._upTransform.localRotation = localLookRotation;
+        this._upTransform.localScale = baseScale;
 
 
         //this is mostly a re-implentation of the ShipLogController.EnterShipComputer() method.
