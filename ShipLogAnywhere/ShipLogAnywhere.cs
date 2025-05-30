@@ -127,75 +127,86 @@ public class ShipLogAnywhere : ModBehaviour
     }
     public void setupShipLogObject()
     {
-        //This will be dramatically simplfied once I get a proper model for it and can set up a prefab.
-        //But for now this will all be done in code.
-        ModHelper.Console.WriteLine("Setting up ship log object", MessageType.Info);
-
-        float targetAspect = 58f / 37f;
-        int maxWidth = (int)(Screen.width * resScale);
-        int maxHeight = (int)(Screen.height * resScale);
-        int width = maxWidth;
-        int height = (int)(width / targetAspect);
-        if (height > maxHeight)
+        if (_mode == "Tool")
         {
-            height = maxHeight;
-            width = (int)(height * targetAspect);
+            //This will be dramatically simplfied once I get a proper model for it and can set up a prefab.
+            //But for now this will all be done in code.
+            ModHelper.Console.WriteLine("Setting up ship log object", MessageType.Info);
+
+            float targetAspect = 58f / 37f;
+            int maxWidth = (int)(Screen.width * resScale);
+            int maxHeight = (int)(Screen.height * resScale);
+            int width = maxWidth;
+            int height = (int)(width / targetAspect);
+            if (height > maxHeight)
+            {
+                height = maxHeight;
+                width = (int)(height * targetAspect);
+            }
+            RenderTexture mirrorTexture = new RenderTexture(width, height, 0);
+            mirrorTexture.Create();
+            Transform canvasTransform = shipLogController._shipLogCanvas.transform;
+            GameObject mirrorCamObj = new GameObject("MirrorCamera");
+            mirrorCam = mirrorCamObj.AddComponent<Camera>();
+
+            int canvasLayer = shipLogController._shipLogCanvas.gameObject.layer;
+            mirrorCam.cullingMask = 1 << canvasLayer;
+            mirrorCam.orthographic = true;
+            mirrorCam.targetTexture = mirrorTexture;
+            mirrorCam.orthographicSize = orthographicSize;
+            mirrorCam.farClipPlane = cameraOffsetDistance * 2;
+
+            Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * cameraOffsetDistance;
+            mirrorCamObj.transform.position = mirrorCamPosition;
+            mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
+            mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
+            mirrorCam.enabled = false;
+
+            GameObject cubePivot = new GameObject("ShipLogMirrorPivot");
+            cubePivot.transform.SetParent(GameObject.Find("MainToolRoot").transform);
+            cubePivot.transform.localPosition = new Vector3(0, 0f, 0);
+            cubePivot.transform.localRotation = Quaternion.identity;
+            portableShipLogTool = cubePivot.AddComponent<PortableShipLogTool>();
+
+            GameObject baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            baseCube.name = "ShipLogMirrorBase";
+            baseCube.transform.SetParent(cubePivot.transform);
+            baseCube.transform.localPosition = new Vector3(0, 0f, -gobjectDistanceToCamera);
+            baseCube.transform.localRotation = Quaternion.identity;
+            float aspectRatio = 58f / 37f;
+            float baseHeight = 1f;
+            float baseWidth = baseHeight * aspectRatio;
+            baseCube.transform.localScale = new Vector3(baseWidth, baseHeight, 1f);
+            baseCube.GetComponent<Collider>().enabled = false;
+
+            GameObject screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            screenQuad.name = "ShipLogScreenFace";
+            screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f);
+            screenQuad.transform.localRotation = Quaternion.Euler(0, 180f, 0);
+            float heightScale = 0.9f;
+            float widthScale = heightScale * (16f / 9f);
+            //screenQuad.transform.localScale = new Vector3(widthScale, heightScale, 1f);  //uncomment this when using proper object
+            screenQuad.transform.localScale = Vector3.one * 0.9f;
+            screenQuad.GetComponent<Collider>().enabled = false;
+            screenQuad.transform.SetParent(baseCube.transform, false);
+
+            Material displayMaterial = new Material(Shader.Find("Unlit/Texture"));
+            displayMaterial.mainTexture = mirrorTexture;
+            screenQuad.GetComponent<Renderer>().material = displayMaterial;
+            screenQuad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
-        RenderTexture mirrorTexture = new RenderTexture(width, height, 0);
-        mirrorTexture.Create();
-        Transform canvasTransform = shipLogController._shipLogCanvas.transform;
-        GameObject mirrorCamObj = new GameObject("MirrorCamera");
-        mirrorCam = mirrorCamObj.AddComponent<Camera>();
+        else if (_mode == "Item")
+        {
+            GameObject baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            baseCube.name = "TestCube";
+            baseCube.transform.SetParent(Locator._timberHearth.transform);
+            baseCube.transform.localPosition = new Vector3(0, 0, 0);
+        }
+        else
+        {
+            modHelper.Console.WriteLine("Something went horribly wrong.  Unknown mode.",MessageType.Error);
 
-        int canvasLayer = shipLogController._shipLogCanvas.gameObject.layer;
-        mirrorCam.cullingMask = 1 << canvasLayer;
-        mirrorCam.orthographic = true;
-        mirrorCam.targetTexture = mirrorTexture;
-        mirrorCam.orthographicSize = orthographicSize;
-        mirrorCam.farClipPlane = cameraOffsetDistance * 2;
-
-        Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * cameraOffsetDistance;
-        mirrorCamObj.transform.position = mirrorCamPosition;
-        mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
-        mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
-        mirrorCam.enabled = false;
-
-        // Create a pivot object for rotation
-        GameObject cubePivot = new GameObject("ShipLogMirrorPivot");
-        cubePivot.transform.SetParent(GameObject.Find("MainToolRoot").transform);
-        cubePivot.transform.localPosition = new Vector3(0, 0f, 0);
-        cubePivot.transform.localRotation = Quaternion.identity;
-        portableShipLogTool = cubePivot.AddComponent<PortableShipLogTool>();
-        //cubePivot.SetActive(false);
-
-        GameObject baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        baseCube.name = "ShipLogMirrorBase";
-        baseCube.transform.SetParent(cubePivot.transform);
-        baseCube.transform.localPosition = new Vector3(0, 0f, -gobjectDistanceToCamera);
-        baseCube.transform.localRotation = Quaternion.identity;
-        float aspectRatio = 58f / 37f;
-        float baseHeight = 1f;
-        float baseWidth = baseHeight * aspectRatio;
-        baseCube.transform.localScale = new Vector3(baseWidth, baseHeight, 1f);
-        baseCube.GetComponent<Collider>().enabled = false;
-
-        GameObject screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        screenQuad.name = "ShipLogScreenFace";
-        screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f);
-        screenQuad.transform.localRotation = Quaternion.Euler(0, 180f, 0);
-        float heightScale = 0.9f;
-        float widthScale = heightScale * (16f / 9f);
-        //screenQuad.transform.localScale = new Vector3(widthScale, heightScale, 1f);  //uncomment this when using proper object
-        screenQuad.transform.localScale = Vector3.one * 0.9f;
-        screenQuad.GetComponent<Collider>().enabled = false;
-        screenQuad.transform.SetParent(baseCube.transform, false);
-
-        // Assign the render texture to the quad's material
-        Material displayMaterial = new Material(Shader.Find("Unlit/Texture"));
-        displayMaterial.mainTexture = mirrorTexture;
-        screenQuad.GetComponent<Renderer>().material = displayMaterial;
-        screenQuad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
+        }
     }
     public void OnCompleteSceneLoad(OWScene previousScene, OWScene newScene)
     {
@@ -268,12 +279,10 @@ public class ShipLogAnywhere : ModBehaviour
                     if (command.HasSameBinding(input, true))
                     {
                         controllerConflictingPrompts.Add(prompt);
-                        ModHelper.Console.WriteLine($"Conflicting controller prompt {prompt._textStr}");
                     }
                     if (command.HasSameBinding(input, false))
                     {
                         keyboardConflictingPrompts.Add(prompt);
-                        ModHelper.Console.WriteLine($"Conflicting keyboard prompt {prompt._textStr}");
                     }
                 }
             }
