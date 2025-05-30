@@ -33,6 +33,7 @@ public class ShipLogAnywhere : ModBehaviour
     public static string _mode;
     public static bool _requireSuit;
     private PortableShipLogTool portableShipLogTool;
+    private PortableShipLogItem portableShipLogItem;
     private ScreenPrompt _openPrompt;
     private HashSet<ScreenPromptElement> controllerConflictingPrompts;
     private HashSet<ScreenPromptElement> keyboardConflictingPrompts;
@@ -74,7 +75,9 @@ public class ShipLogAnywhere : ModBehaviour
         if (shipLogController != null && InGame && _openPrompt != null)
         {
             _openPrompt.SetVisibility(false);
-            if (!(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) &&
+            if (
+                ((_mode == "Tool" && portableShipLogTool != null) || (_mode == "Item" && portableShipLogItem != null && portableShipLogItem._holding)) &&
+                !(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) &&
                 !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) &&
                 !PlayerState._usingShipComputer &&
                 !PlayerState._insideShip &&
@@ -82,7 +85,16 @@ public class ShipLogAnywhere : ModBehaviour
             {
                 _openPrompt.SetVisibility(true);
                 if (OWInput.IsNewlyPressed(GetSelectedInput(), InputMode.Character) && !otherPromptWithSameKeyVisible())
-                    portableShipLogTool.EquipTool();
+                {
+                    if (_mode == "Tool" && portableShipLogTool != null)
+                    {
+                        portableShipLogTool.EquipTool();
+                    }
+                    else if (_mode == "Item" && portableShipLogItem != null && portableShipLogItem._holding)
+                    {
+                        portableShipLogItem.lookAtLog();
+                    }
+                }
             }
         }
     }
@@ -130,6 +142,89 @@ public class ShipLogAnywhere : ModBehaviour
         };
     }
     public void setupShipLogObject()
+    {
+        if (_mode != "Tool" && _mode != "Item")
+        {
+            modHelper.Console.WriteLine("Something went horribly wrong. Unknown mode.", MessageType.Error);
+            return;
+        }
+        ModHelper.Console.WriteLine("Setting up ship log object", MessageType.Info);
+
+
+        float targetAspect = 58f / 37f;
+        int maxWidth = (int)(Screen.width * resScale);
+        int maxHeight = (int)(Screen.height * resScale);
+        int width = maxWidth;
+        int height = (int)(width / targetAspect);
+        if (height > maxHeight)
+        {
+            height = maxHeight;
+            width = (int)(height * targetAspect);
+        }
+
+        RenderTexture mirrorTexture = new RenderTexture(width, height, 0);
+        mirrorTexture.Create();
+
+        Transform canvasTransform = shipLogController._shipLogCanvas.transform;
+        GameObject mirrorCamObj = new GameObject("MirrorCamera");
+        mirrorCam = mirrorCamObj.AddComponent<Camera>();
+
+        int canvasLayer = shipLogController._shipLogCanvas.gameObject.layer;
+        mirrorCam.cullingMask = 1 << canvasLayer;
+        mirrorCam.orthographic = true;
+        mirrorCam.targetTexture = mirrorTexture;
+        mirrorCam.orthographicSize = orthographicSize;
+        mirrorCam.farClipPlane = cameraOffsetDistance * 2;
+
+        Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * cameraOffsetDistance;
+        mirrorCamObj.transform.position = mirrorCamPosition;
+        mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
+        mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
+        mirrorCam.enabled = (_mode == "Item");
+
+        GameObject baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        baseCube.name = "ShipLogMirrorBase";
+
+        if (_mode == "Tool")
+        {
+            GameObject cubePivot = new GameObject("ShipLogMirrorPivot");
+            cubePivot.transform.SetParent(GameObject.Find("MainToolRoot").transform);
+            cubePivot.transform.localPosition = Vector3.zero;
+            cubePivot.transform.localRotation = Quaternion.identity;
+            portableShipLogTool = cubePivot.AddComponent<PortableShipLogTool>();
+            baseCube.transform.SetParent(cubePivot.transform);
+            baseCube.transform.localPosition = new Vector3(0, 0f, -gobjectDistanceToCamera);
+            baseCube.GetComponent<Collider>().enabled = false;
+            //cubePivot.GetComponent<Collider>().enabled = false;
+        }
+        else if (_mode == "Item")
+        {
+            baseCube.transform.SetParent(Locator._timberHearth.transform);
+            baseCube.transform.localPosition = new Vector3(16f, -43f, 188f);
+            portableShipLogItem = baseCube.AddComponent<PortableShipLogItem>();
+        }
+
+        baseCube.transform.localRotation = Quaternion.identity;
+        float baseHeight = 1f;
+        float baseWidth = baseHeight * targetAspect;
+        baseCube.transform.localScale = new Vector3(baseWidth, baseHeight, 1f);
+
+        GameObject screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        screenQuad.name = "ShipLogScreenFace";
+        screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f);
+        screenQuad.transform.localRotation = Quaternion.Euler(0, 180f, 0);
+        screenQuad.transform.localScale = Vector3.one * 0.9f;
+        screenQuad.GetComponent<Collider>().enabled = false;
+        screenQuad.transform.SetParent(baseCube.transform, false);
+
+        Material displayMaterial = new Material(Shader.Find("Unlit/Texture"));
+        displayMaterial.mainTexture = mirrorTexture;
+        Renderer screenRenderer = screenQuad.GetComponent<Renderer>();
+        screenRenderer.material = displayMaterial;
+        screenRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+    }
+
+    public void setupShipLogObjectBackup()
     {
         if (_mode == "Tool")
         {
@@ -201,15 +296,65 @@ public class ShipLogAnywhere : ModBehaviour
         }
         else if (_mode == "Item")
         {
+            float targetAspect = 58f / 37f;
+            int maxWidth = (int)(Screen.width * resScale);
+            int maxHeight = (int)(Screen.height * resScale);
+            int width = maxWidth;
+            int height = (int)(width / targetAspect);
+            if (height > maxHeight)
+            {
+                height = maxHeight;
+                width = (int)(height * targetAspect);
+            }
+            RenderTexture mirrorTexture = new RenderTexture(width, height, 0);
+            mirrorTexture.Create();
+            Transform canvasTransform = shipLogController._shipLogCanvas.transform;
+            GameObject mirrorCamObj = new GameObject("MirrorCamera");
+            mirrorCam = mirrorCamObj.AddComponent<Camera>();
+
+            int canvasLayer = shipLogController._shipLogCanvas.gameObject.layer;
+            mirrorCam.cullingMask = 1 << canvasLayer;
+            mirrorCam.orthographic = true;
+            mirrorCam.targetTexture = mirrorTexture;
+            mirrorCam.orthographicSize = orthographicSize;
+            mirrorCam.farClipPlane = cameraOffsetDistance * 2;
+
+            Vector3 mirrorCamPosition = canvasTransform.position - canvasTransform.forward * cameraOffsetDistance;
+            mirrorCamObj.transform.position = mirrorCamPosition;
+            mirrorCamObj.transform.LookAt(canvasTransform.position, canvasTransform.transform.up);
+            mirrorCamObj.transform.SetParent(canvasTransform, worldPositionStays: true);
+            mirrorCam.enabled = true;
+
             GameObject baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            baseCube.name = "TestCube";
+            baseCube.name = "ShipLogMirrorBase";
             baseCube.transform.SetParent(Locator._timberHearth.transform);
-            baseCube.transform.localPosition = new Vector3(16f, - 43f, 188f);
+            baseCube.transform.localPosition = new Vector3(16f, -43f, 188f);
+            baseCube.transform.localRotation = Quaternion.identity;
             baseCube.AddComponent<PortableShipLogItem>();
+            float aspectRatio = 58f / 37f;
+            float baseHeight = 1f;
+            float baseWidth = baseHeight * aspectRatio;
+            baseCube.transform.localScale = new Vector3(baseWidth, baseHeight, 1f);
+
+            GameObject screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            screenQuad.name = "ShipLogScreenFace";
+            screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f);
+            screenQuad.transform.localRotation = Quaternion.Euler(0, 180f, 0);
+            float heightScale = 0.9f;
+            float widthScale = heightScale * (16f / 9f);
+            //screenQuad.transform.localScale = new Vector3(widthScale, heightScale, 1f);  //uncomment this when using proper object
+            screenQuad.transform.localScale = Vector3.one * 0.9f;
+            screenQuad.GetComponent<Collider>().enabled = false;
+            screenQuad.transform.SetParent(baseCube.transform, false);
+
+            Material displayMaterial = new Material(Shader.Find("Unlit/Texture"));
+            displayMaterial.mainTexture = mirrorTexture;
+            screenQuad.GetComponent<Renderer>().material = displayMaterial;
+            screenQuad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
         else
         {
-            modHelper.Console.WriteLine("Something went horribly wrong.  Unknown mode.",MessageType.Error);
+            modHelper.Console.WriteLine("Something went horribly wrong.  Unknown mode.", MessageType.Error);
 
         }
     }
