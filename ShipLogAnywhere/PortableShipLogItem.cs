@@ -62,6 +62,7 @@ public class PortableShipLogItem : OWItem
         }
     }
 
+
     public override void Awake()
     {
         base.Awake();
