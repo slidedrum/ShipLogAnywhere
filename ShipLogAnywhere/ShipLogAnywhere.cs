@@ -77,10 +77,10 @@ public class ShipLogAnywhere : ModBehaviour
             _openPrompt.SetVisibility(false);
             if (
                 ((_mode == "Tool" && portableShipLogTool != null) || (_mode == "Item" && portableShipLogItem != null && portableShipLogItem._holding)) &&
-                !(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit) &&
+                (_mode == "Item" || !(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit)) &&
                 !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) &&
                 !PlayerState._usingShipComputer &&
-                !PlayerState._insideShip &&
+                (!PlayerState._insideShip || _mode == "Item") &&
                 OWInput.IsInputMode(InputMode.Character))
             {
                 _openPrompt.SetVisibility(true);
@@ -206,10 +206,18 @@ public class ShipLogAnywhere : ModBehaviour
         }
         else if (_mode == "Item")
         {
-            baseCube.transform.SetParent(Locator._timberHearth.transform);
-            baseCube.transform.localPosition = new Vector3(16f, -43f, 188f);
+            baseCube.transform.SetParent(Locator._shipBody.transform);
+            baseCube.transform.localPosition = new Vector3(1.2f, 2f, - 4f);
+            baseCube.transform.localRotation = Quaternion.Euler(0f, 2.284f, 180f);
             portableShipLogItem = baseCube.AddComponent<PortableShipLogItem>();
-
+            portableShipLogItem.transform.localScale *= 0.3f;
+            foreach (var collider in portableShipLogItem._colliders)
+            {
+                if (collider != null)
+                {
+                    collider.GetCollider().isTrigger = true;
+                }
+            }
         }
 
 
