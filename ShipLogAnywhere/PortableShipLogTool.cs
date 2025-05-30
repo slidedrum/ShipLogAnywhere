@@ -1,10 +1,6 @@
 ﻿using System.Collections.Generic;
-using System;
 using UnityEngine;
-using OWML.ModHelper;
 using OWML.Common;
-using Epic.OnlineServices;
-using System.Linq;
 
 namespace ShipLogAnywhere;
 
