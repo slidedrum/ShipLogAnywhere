@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using OWML.Common;
 using OWML.ModHelper;
+using OWML.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,6 +27,8 @@ public class ShipLogAnywhere : ModBehaviour
 
     Dictionary<float, List<Callback>> slowUpdates = new Dictionary<float, List<Callback>>();
     private Dictionary<float, float> _elapsedTimeByInterval = new Dictionary<float, float>();
+
+    public ItemType PortableShipLogType { get; private set; }
 
     public static string _mode;
     public static bool _requireSuit;
@@ -102,6 +105,7 @@ public class ShipLogAnywhere : ModBehaviour
         Instance = this;
         modHelper = ModHelper;
         GlobalMessenger.AddListener("FinishOpenEyes", setupPrompt);
+        PortableShipLogType = EnumUtils.Create<ItemType>("PortableShipLog");
     }
     public override void Configure(IModConfig config)
     {
@@ -200,7 +204,8 @@ public class ShipLogAnywhere : ModBehaviour
             GameObject baseCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             baseCube.name = "TestCube";
             baseCube.transform.SetParent(Locator._timberHearth.transform);
-            baseCube.transform.localPosition = new Vector3(0, 0, 0);
+            baseCube.transform.localPosition = new Vector3(16f, - 43f, 188f);
+            baseCube.AddComponent<PortableShipLogItem>();
         }
         else
         {
