@@ -30,21 +30,27 @@ public class PortableShipLogItem : OWItem
             Transform cameraRoot = GameObject.Find("MainToolRoot")?.transform;
             if (cameraRoot != null)
             {
+                // Step 1: Create the holder transforms WITHOUT any parent yet
                 this._downTransform = new GameObject("StowTransform").transform;
-                this._downTransform.SetParent(cameraRoot, false);
-
                 this._upTransform = new GameObject("HoldTransform").transform;
-                this._upTransform.SetParent(cameraRoot, false);
 
-                Vector3 offsetPos = cameraRoot.position + -cameraRoot.up * ShipLogAnywhere.gobjectDistanceToCamera;
-                Quaternion lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.forward);
-                this._downTransform.transform.rotation = lookRot;
-                this._downTransform.transform.position = offsetPos;
-                offsetPos = cameraRoot.position + cameraRoot.forward * ShipLogAnywhere.gobjectDistanceToCamera;
-                lookRot = Quaternion.LookRotation(cameraRoot.position - offsetPos, cameraRoot.up);
-                this._upTransform.transform.rotation = lookRot;
-                this._upTransform.transform.position = offsetPos;
-                ShipLogAnywhere.modHelper.Console.WriteLine("Set up transforms", MessageType.Success);
+                // Step 2: Calculate the world-space positions and rotations based on cameraRoot
+                Vector3 downPos = cameraRoot.position - cameraRoot.up * ShipLogAnywhere.gobjectDistanceToCamera;
+                Quaternion downRot = Quaternion.LookRotation(cameraRoot.position - downPos, cameraRoot.forward);
+
+                Vector3 upPos = cameraRoot.position + cameraRoot.forward * ShipLogAnywhere.gobjectDistanceToCamera;
+                Quaternion upRot = Quaternion.LookRotation(cameraRoot.position - upPos, cameraRoot.up);
+
+                // Step 3: Apply those world-space values to the transforms
+                this._downTransform.position = downPos;
+                this._downTransform.rotation = downRot;
+
+                this._upTransform.position = upPos;
+                this._upTransform.rotation = upRot;
+
+                // Now their localPosition/localRotation are relative to the tablet,
+                // but still match the correct world-space setup.
+                ShipLogAnywhere.modHelper.Console.WriteLine("Set up relative transforms", MessageType.Success);
             }
             else
             {
@@ -58,10 +64,12 @@ public class PortableShipLogItem : OWItem
     {
         if (_looking == true)
         {
-            _looking = false;
+            this._looking = false;
+            this.transform.localPosition = new Vector3(0f, -0.2f, 0.1f);
+            this.transform.localRotation = Quaternion.Euler(0f, 240f, 0f);
+            this.transform.localScale = Vector3.one * 0.5f;
         }
     }
-
 
     public override void Awake()
     {
@@ -71,19 +79,19 @@ public class PortableShipLogItem : OWItem
     public override void PickUpItem(Transform holdTranform)
     {
         base.PickUpItem(holdTranform);
-        transform.localPosition = new Vector3(0f, - 0.2f, 0.1f);
-        transform.localRotation = Quaternion.Euler(0f, 240f, 0f);
-        transform.localScale = Vector3.one * 0.5f;
-        _holding = true;
+        this.transform.localPosition = new Vector3(0f, - 0.2f, 0.1f);
+        this.transform.localRotation = Quaternion.Euler(0f, 240f, 0f);
+        this.transform.localScale = Vector3.one * 0.5f;
+        this._holding = true;
     }
     public override void DropItem(Vector3 position, Vector3 normal, Transform parent, Sector sector, IItemDropTarget customDropTarget)
     {
         base.DropItem(position, normal, parent, sector, customDropTarget);
 
         var playerTransform = Locator._playerBody.transform;
-        transform.rotation = Quaternion.LookRotation(playerTransform.up, -playerTransform.forward);
-        transform.localScale = Vector3.one;
-        _holding = false;
+        this.transform.rotation = Quaternion.LookRotation(playerTransform.up, -playerTransform.forward);
+        this.transform.localScale = Vector3.one;
+        this._holding = false;
     }
     public override string GetDisplayName()
     {
@@ -96,10 +104,18 @@ public class PortableShipLogItem : OWItem
             NotificationManager.SharedInstance.PostNotification(new NotificationData(NotificationTarget.Player, "Ship Log Unavailable."), false);
             return;
         }
+        if (_looking == true)
+        {
+            return;
+        }
         _looking = true;
+        this.transform.localPosition = new Vector3(0f, 0.4f, 0.5f);
+        Transform cameraTransform = Locator.GetPlayerCamera().transform;
+        Quaternion worldLookRotation = Quaternion.LookRotation(cameraTransform.position - transform.position, cameraTransform.up);
+        transform.localRotation = Quaternion.Inverse(transform.parent.rotation) * worldLookRotation;
+        this.transform.localScale = Vector3.one * 1f;
+
         //this is mostly a re-implentation of the ShipLogController.EnterShipComputer() method.
-        //Locator.GetToolModeSwapper().UnequipTool();
-        //base.EquipTool();
         shipLogController.enabled = true;
         shipLogController._usingShipLog = true;
         shipLogController._exiting = false;
