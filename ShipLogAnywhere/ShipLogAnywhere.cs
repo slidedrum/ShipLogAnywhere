@@ -76,11 +76,10 @@ public class ShipLogAnywhere : ModBehaviour
         {
             _openPrompt.SetVisibility(false);
             if (
-                ((_mode == "Tool" && portableShipLogTool != null) || (_mode == "Item" && portableShipLogItem != null && portableShipLogItem._holding)) &&
+                ((_mode == "Tool" && portableShipLogTool != null) || (_mode == "Item" && portableShipLogItem != null && Locator.GetToolModeSwapper().GetItemCarryTool().GetHeldItemType() == PortableShipLogType)) &&
                 (_mode == "Item" || !(!Locator.GetPlayerSuit().IsWearingSuit() && ShipLogAnywhere._requireSuit)) &&
                 !(!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged) &&
                 !PlayerState._usingShipComputer &&
-                (!PlayerState._insideShip || _mode == "Item") &&
                 OWInput.IsInputMode(InputMode.Character))
             {
                 _openPrompt.SetVisibility(true);
@@ -90,7 +89,7 @@ public class ShipLogAnywhere : ModBehaviour
                     {
                         portableShipLogTool.EquipTool();
                     }
-                    else if (_mode == "Item" && portableShipLogItem != null && portableShipLogItem._holding)
+                    else if (_mode == "Item" && portableShipLogItem != null && Locator.GetToolModeSwapper().GetItemCarryTool().GetHeldItemType() == PortableShipLogType)
                     {
                         portableShipLogItem.lookAtLog();
                     }
@@ -99,11 +98,13 @@ public class ShipLogAnywhere : ModBehaviour
         }
         if (portableShipLogItem != null)
             portableShipLogItem.Update();
+        if (portableShipLogTool != null)
+            portableShipLogTool.update();
     }
 
     private void SlowUpdate60fps()
     {
-        if (mirrorCam)
+        if (mirrorCam && ((_mode == "Item" && portableShipLogItem != null && Locator.GetToolModeSwapper().GetItemCarryTool().GetHeldItemType() == PortableShipLogType && portableShipLogItem._looking)) || _mode == "Tool" && portableShipLogTool != null && portableShipLogTool._isEquipped)
         {
             mirrorCam.Render();
         }
@@ -197,7 +198,6 @@ public class ShipLogAnywhere : ModBehaviour
             GameObject cubePivot = new GameObject("ShipLogMirrorPivot");
             cubePivot.transform.SetParent(GameObject.Find("MainToolRoot").transform);
             cubePivot.transform.localPosition = Vector3.zero;
-            cubePivot.transform.localRotation = Quaternion.identity;
             portableShipLogTool = cubePivot.AddComponent<PortableShipLogTool>();
             baseCube.transform.SetParent(cubePivot.transform);
             baseCube.transform.localPosition = new Vector3(0, 0f, -gobjectDistanceToCamera);
@@ -219,9 +219,7 @@ public class ShipLogAnywhere : ModBehaviour
                 }
             }
         }
-
-
-
+        
         GameObject screenQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         screenQuad.name = "ShipLogScreenFace";
         screenQuad.transform.localPosition = new Vector3(0, 0, 0.51f);

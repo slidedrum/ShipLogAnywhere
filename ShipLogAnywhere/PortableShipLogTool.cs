@@ -1,15 +1,18 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using OWML.Common;
+using static UnityEngine.GridBrushBase;
 
 namespace ShipLogAnywhere;
 
 public class PortableShipLogTool : PlayerTool
 {
     private ShipLogController shipLogController;
+    private GameObject objectBase;
     private bool InGame => LoadManager.GetCurrentScene() == OWScene.SolarSystem || LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse;
     public PortableShipLogTool()
     {
+
         this._moveSpring = new DampedSpringQuat(15f, 0.8f);
         GameObject shipLogObject = GameObject.Find("ShipLog");
         if (shipLogObject == null)
@@ -40,6 +43,7 @@ public class PortableShipLogTool : PlayerTool
                 lookRot = Quaternion.LookRotation(toolRoot.position - offsetPos, toolRoot.up);
                 this._holdTransform.transform.rotation = lookRot;
                 this._holdTransform.transform.position = offsetPos;
+                objectBase = this.transform.Find("ShipLogMirrorBase").gameObject;
                 ShipLogAnywhere.modHelper.Console.WriteLine("Set up transforms", MessageType.Success);
             }
             else
@@ -56,6 +60,14 @@ public class PortableShipLogTool : PlayerTool
             this.UnequipTool();
         }
     }
+    public void update()
+    {
+        bool shouldBeActive = this.IsEquipped() || this.IsPuttingAway();
+        if (this.objectBase.activeSelf != shouldBeActive)
+        {
+            this.objectBase.SetActive(shouldBeActive);
+        }
+    }
 
     public override void EquipTool()
     {
@@ -63,7 +75,7 @@ public class PortableShipLogTool : PlayerTool
             return;
         if (!shipLogController || !shipLogController.gameObject.activeInHierarchy || shipLogController._damaged)
         {
-            NotificationManager.SharedInstance.PostNotification(new NotificationData(NotificationTarget.Player,"Ship Log Unavailable."), false);
+            NotificationManager.SharedInstance.PostNotification(new NotificationData(NotificationTarget.Player, "Ship Log Unavailable."), false);
             return;
         }
         //this is mostly a re-implentation of the ShipLogController.EnterShipComputer() method.

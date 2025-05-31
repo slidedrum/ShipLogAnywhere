@@ -105,7 +105,7 @@ public class PortableShipLogItem : OWItem
 
         var playerTransform = Locator._playerBody.transform;
         this.transform.rotation = Quaternion.LookRotation(playerTransform.up, -playerTransform.forward);
-        this.transform.localScale = this.baseScale;
+        this.transform.localScale = this.baseScale * 0.3f;
         this._holding = false;
     }
     public override string GetDisplayName()
