@@ -6,14 +6,14 @@ https://github.com/user-attachments/assets/a0b3efc6-1f41-4c8b-8cb7-c6476863ae6c
 
 Todo:
 - Settings
-  - Rebind key
+  - Rebind key - Done
   - Positional settings
-  - Require suit
-- Item mode
+  - Require suit - Done
+- Item mode - WIP
 - Add a real model for it
 - VR support
 - QSB support
-- Button prompt
+- Button prompt - Done
 
 
 
